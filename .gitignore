@@ -1,0 +1,19 @@
+# Build output
+**/bin/
+**/obj/
+.build/
+dist/
+
+# macOS
+.DS_Store
+
+# IDE / tooling
+.vs/
+.vscode/
+.idea/
+*.user
+*.swiftpm
+xcuserdata/
+
+# NuGet
+*.nupkg
