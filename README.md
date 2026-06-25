@@ -7,8 +7,9 @@ statistics engine. The Swift app is pure UI; all of the math and all of the grap
 from the engine, so results are numerically identical to the Windows edition (the engine
 is the same code, verified by a 309-check reference suite).
 
-> This is the macOS port. The original Windows (.NET 10 + WPF) edition lives in a separate
-> repository; this repo shares only the platform-neutral `StatStudio.Core` engine.
+> This is the macOS port. The original Windows (.NET 10 + WPF) edition lives at
+> **[dhucul/StatStudio](https://github.com/dhucul/StatStudio)**; this repo shares only the
+> platform-neutral `StatStudio.Core` engine.
 
 ## Features
 
