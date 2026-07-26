@@ -9,8 +9,16 @@ namespace StatStudio.Engine;
 /// <summary>Control charts (variables + attributes), capability, Gage R&amp;R.</summary>
 internal static class OpsSpc
 {
+    private static int CheckedCount(double value, string label)
+    {
+        double rounded = Math.Round(value);
+        if (!double.IsFinite(value) || value < 0 || Math.Abs(value - rounded) > 1e-9 || rounded > int.MaxValue)
+            throw new ArgumentException($"{label} values must be non-negative integers.");
+        return (int)rounded;
+    }
+
     private static int[] IntColumn(Worksheet ws, string name) =>
-        Require(ws, name).NumericValues().Select(v => (int)Math.Round(v)).ToArray();
+        Require(ws, name).NumericValues().Select(v => CheckedCount(v, name)).ToArray();
 
     public static void VariablesChart(EngineRequest req, EngineResponse res, bool useRange)
     {
@@ -41,24 +49,34 @@ internal static class OpsSpc
     public static void Attribute(EngineRequest req, EngineResponse res, string kind)
     {
         var ws = Ws(req);
-        var counts = IntColumn(ws, StrReq(req, "counts"));
+        string countsName = StrReq(req, "counts");
         SpcChart chart;
         if (kind == "P" || kind == "U")
         {
-            var sizes = IntColumn(ws, StrReq(req, "sizes"));
-            int m = Math.Min(counts.Length, sizes.Length);
-            if (m < 2) throw new ArgumentException("Need at least 2 rows.");
+            string sizesName = StrReq(req, "sizes");
+            var rows = Columns.Rows(new[] { Require(ws, countsName), Require(ws, sizesName) });
+            if (rows.Count < 2) throw new ArgumentException("Need at least 2 complete rows.");
+            var counts = rows.Select(r => CheckedCount(r[0], countsName)).ToArray();
+            var sizes = rows.Select(r => CheckedCount(r[1], sizesName)).ToArray();
+            if (sizes.Any(n => n <= 0)) throw new ArgumentException("Subgroup sizes must be positive integers.");
+            if (kind == "P" && counts.Where((count, i) => count > sizes[i]).Any())
+                throw new ArgumentException("Defective counts cannot exceed subgroup sizes.");
             chart = kind == "P"
-                ? ControlCharts.PChart(counts.Take(m).ToArray(), sizes.Take(m).ToArray())
-                : ControlCharts.UChart(counts.Take(m).ToArray(), sizes.Take(m).ToArray());
+                ? ControlCharts.PChart(counts, sizes)
+                : ControlCharts.UChart(counts, sizes);
         }
         else if (kind == "NP")
         {
+            var counts = IntColumn(ws, countsName);
             if (counts.Length < 2) throw new ArgumentException("Need at least 2 rows.");
-            chart = ControlCharts.NPChart(counts, Int(req, "size", 50));
+            int size = PositiveInt(req, "size", 50);
+            if (counts.Any(count => count > size))
+                throw new ArgumentException("Defective counts cannot exceed subgroup size.");
+            chart = ControlCharts.NPChart(counts, size);
         }
         else // C
         {
+            var counts = IntColumn(ws, countsName);
             if (counts.Length < 2) throw new ArgumentException("Need at least 2 rows.");
             chart = ControlCharts.CChart(counts);
         }
@@ -74,6 +92,8 @@ internal static class OpsSpc
         var v = Require(ws, col).NumericValues();
         if (v.Length < 2) throw new ArgumentException("Need at least 2 values.");
         double? lsl = NumOpt(req, "lsl"), usl = NumOpt(req, "usl"), target = NumOpt(req, "target");
+        if (lsl.HasValue && usl.HasValue && lsl.Value >= usl.Value)
+            throw new ArgumentException("LSL must be less than USL.");
         var cap = StatStudio.Core.Statistics.Spc.Capability.FromIndividuals(v, lsl, usl, target);
         res.StatusTitle = $"Process Capability of {col}";
         res.SessionText = Out.Raw(SpcFormatter.Capability(cap));

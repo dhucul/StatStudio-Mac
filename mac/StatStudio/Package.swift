@@ -8,6 +8,11 @@ let package = Package(
         .executableTarget(
             name: "StatStudio",
             path: "Sources/StatStudio"
+        ),
+        .testTarget(
+            name: "StatStudioTests",
+            dependencies: ["StatStudio"],
+            path: "Tests/StatStudioTests"
         )
     ],
     // Build in Swift 5 language mode for now (relaxed concurrency checking);

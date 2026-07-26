@@ -36,6 +36,16 @@ internal static class SpcTests
         Check.Close(p.Ucl[0], 0.195104, "P UCL", 1e-3);
         Check.Close(p.Lcl[0], 0.0, "P LCL (clamped at 0)");
 
+        var boundedP = ControlCharts.PChart(new[] { 1, 1 }, new[] { 2, 2 });
+        Check.True(boundedP.Ucl.All(v => v <= 1), "P UCL is capped at 1");
+        var boundedNp = ControlCharts.NPChart(new[] { 1, 1 }, 2);
+        Check.True(boundedNp.Ucl.All(v => v <= 2), "NP UCL is capped at subgroup size");
+
+        var constant = ControlCharts.IMR(Enumerable.Repeat(5.0, 9).ToArray()).Individuals;
+        Check.True(!constant.OutOfControl.Any(v => v), "center-line equality does not trigger Nelson Test 2");
+        Check.Throws<ArgumentException>(() => ControlCharts.PChart(new[] { 2, 1 }, new[] { 1, 1 }),
+            "P chart rejects defectives greater than subgroup size");
+
         Check.Section("C chart  {5,3,4,6,2}");
         var c = ControlCharts.CChart(new[] { 5, 3, 4, 6, 2 });
         Check.Close(c.Center, 4.0, "c-bar");

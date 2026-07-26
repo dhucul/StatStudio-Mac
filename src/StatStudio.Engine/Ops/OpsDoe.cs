@@ -132,6 +132,7 @@ internal static class OpsDoe
         var (y, comps) = Columns.Design(Require(ws, response), names.Select(n => Require(ws, n)).ToList());
         if (comps.Length < 2) throw new ArgumentException("Select at least two components.");
         res.StatusTitle = "Analyze Mixture Design";
-        res.SessionText = Out.Raw(DoeFormatters.MixtureModel(MixtureAnalysis.Fit(y, comps, names.ToList(), quadratic: true)));
+        res.SessionText = Out.Raw(DoeFormatters.MixtureModel(
+            MixtureAnalysis.Fit(y, comps, names.ToList(), quadratic: true, response: response)));
     }
 }

@@ -28,6 +28,23 @@ internal static class Check
     public static void Equal(string actual, string expected, string label) =>
         True(actual == expected, $"{label}  ('{actual}' == '{expected}')");
 
+    public static void Throws<T>(Action action, string label) where T : Exception
+    {
+        try
+        {
+            action();
+            True(false, label);
+        }
+        catch (T)
+        {
+            True(true, label);
+        }
+        catch (Exception ex)
+        {
+            True(false, $"{label}  (threw {ex.GetType().Name}, expected {typeof(T).Name})");
+        }
+    }
+
     public static int Summary()
     {
         Console.WriteLine($"\n{Passed} passed, {Failed} failed.");

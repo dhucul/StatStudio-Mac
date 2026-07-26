@@ -38,10 +38,15 @@ internal static class Args
     {
         if (req.Params is { } e && e.ValueKind == JsonValueKind.Object && e.TryGetProperty(key, out var v))
         {
-            if (v.ValueKind == JsonValueKind.Number) return v.GetDouble();
-            if (v.ValueKind == JsonValueKind.String &&
-                double.TryParse(v.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d))
-                return d;
+            double value;
+            if (v.ValueKind == JsonValueKind.Number) value = v.GetDouble();
+            else if (v.ValueKind == JsonValueKind.String &&
+                     double.TryParse(v.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d))
+                value = d;
+            else
+                throw new ArgumentException($"'{key}' must be numeric.");
+            if (!double.IsFinite(value)) throw new ArgumentException($"'{key}' must be finite.");
+            return value;
         }
         return null;
     }
@@ -51,7 +56,37 @@ internal static class Args
     public static int Int(EngineRequest req, string key, int dflt)
     {
         var n = NumOpt(req, key);
-        return n.HasValue ? (int)Math.Round(n.Value) : dflt;
+        if (!n.HasValue) return dflt;
+        double rounded = Math.Round(n.Value);
+        if (Math.Abs(n.Value - rounded) > 1e-9 || rounded < int.MinValue || rounded > int.MaxValue)
+            throw new ArgumentException($"'{key}' must be an integer.");
+        return (int)rounded;
+    }
+
+    public static int PositiveInt(EngineRequest req, string key, int dflt)
+    {
+        int value = Int(req, key, dflt);
+        return value > 0 ? value : throw new ArgumentException($"'{key}' must be greater than 0.");
+    }
+
+    public static int NonNegativeInt(EngineRequest req, string key, int dflt)
+    {
+        int value = Int(req, key, dflt);
+        return value >= 0 ? value : throw new ArgumentException($"'{key}' must be non-negative.");
+    }
+
+    public static double PositiveNum(EngineRequest req, string key, double dflt)
+    {
+        double value = Num(req, key, dflt);
+        return value > 0 ? value : throw new ArgumentException($"'{key}' must be greater than 0.");
+    }
+
+    public static double Probability(EngineRequest req, string key, double dflt, bool open = false)
+    {
+        double value = Num(req, key, dflt);
+        bool valid = open ? value is > 0 and < 1 : value is >= 0 and <= 1;
+        return valid ? value : throw new ArgumentException(
+            $"'{key}' must be {(open ? "between 0 and 1" : "from 0 through 1")}.");
     }
 
     public static bool Bool(EngineRequest req, string key, bool dflt = false)
@@ -69,7 +104,10 @@ internal static class Args
     {
         var n = NumOpt(req, key);
         if (!n.HasValue) return dflt;
-        return n.Value > 1 ? n.Value / 100.0 : n.Value;
+        double value = n.Value > 1 ? n.Value / 100.0 : n.Value;
+        return value is > 0 and < 1
+            ? value
+            : throw new ArgumentException($"'{key}' must be between 0 and 1 (or 0 and 100 percent).");
     }
 
     public static Alternative Alt(EngineRequest req, string key = "alt") => Str(req, key) switch

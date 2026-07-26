@@ -19,8 +19,10 @@ public static class Sarima
         int sp, int sd, int sq, int s, int forecasts = 0, bool includeConstant = true)
     {
         if (s < 1) throw new ArgumentException("Seasonal period must be ≥ 1.");
-        if (p < 0 || q < 0 || sp < 0 || sq < 0 || d < 0 || sd < 0)
-            throw new ArgumentException("Orders must be non-negative.");
+        if (p < 0 || q < 0 || sp < 0 || sq < 0 || d < 0 || sd < 0 ||
+            p > 5 || q > 5 || sp > 3 || sq > 3 || d > 2 || sd > 1)
+            throw new ArgumentException("SARIMA orders out of range (p,q ≤ 5; P,Q ≤ 3; d ≤ 2; D ≤ 1).");
+        if (forecasts < 0) throw new ArgumentException("Forecast count must be non-negative.");
 
         // Difference: regular d times, then seasonal D times — recording each stage for integration.
         var stages = new List<(int Lag, double[] Pre)>();
@@ -192,8 +194,17 @@ public static class Sarima
             fc = integ;
         }
 
-        // psi-weight CI on the differenced scale (approximate at the original scale).
+        // Transform impulse-response weights through the same inverse-difference
+        // stages as the point forecasts before accumulating forecast variance.
         var psi = Psi(a, mm, h);
+        for (int st = stages.Count - 1; st >= 0; st--)
+        {
+            int lag = stages[st].Lag;
+            var integrated = new double[h];
+            for (int step = 0; step < h; step++)
+                integrated[step] = psi[step] + (step >= lag ? integrated[step - lag] : 0);
+            psi = integrated;
+        }
         var lo = new double[h]; var hi = new double[h];
         double cumVar = 0;
         for (int step = 0; step < h; step++)

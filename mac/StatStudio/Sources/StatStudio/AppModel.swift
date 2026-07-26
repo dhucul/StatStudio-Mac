@@ -18,6 +18,10 @@ final class AppModel: ObservableObject {
     @Published var gridGeneration = 0
 
     let engine = EngineClient()
+    private var operationTail: Task<Void, Never>?
+    private var operationEpoch = 0
+    private var operationSequence = 0
+    private var worksheetRevision = 0
 
     init() {
         log("StatStudio — ready.")
@@ -59,15 +63,22 @@ final class AppModel: ObservableObject {
     /// Structural replace: swap the worksheet and tell the grid to rebuild.
     func setWorksheet(_ ws: WorksheetModel) {
         worksheet = ws
+        worksheetRevision += 1
         gridGeneration += 1
     }
 
+    func worksheetDidEdit() {
+        worksheetRevision += 1
+    }
+
     func newWorksheet() {
+        invalidatePendingOperations()
         setWorksheet(.empty())
         statusText = "New worksheet"
     }
 
     func loadDemo() {
+        invalidatePendingOperations()
         setWorksheet(DemoData.build())
         log("Loaded demo dataset (Height, Weight, Group).")
         statusText = "Demo loaded"
@@ -136,20 +147,53 @@ final class AppModel: ObservableObject {
 
     // ---- analyses ----------------------------------------------------------
 
-    /// Run an op that returns Session text and/or replaces the worksheet.
+    /// Queue an op so its worksheet snapshot is taken only after every earlier op has
+    /// completed. Local worksheet replacements invalidate queued/running responses.
     func run(op: String, params: [String: JSONValue] = [:]) async {
+        let previous = operationTail
+        let epoch = operationEpoch
+        operationSequence += 1
+        let sequence = operationSequence
+        let task = Task { @MainActor [weak self] in
+            await previous?.value
+            guard let self, !Task.isCancelled, epoch == self.operationEpoch else { return }
+            await self.performRun(op: op, params: params, epoch: epoch)
+        }
+        operationTail = task
+        await task.value
+        if sequence == operationSequence { operationTail = nil }
+    }
+
+    private func performRun(op: String, params: [String: JSONValue], epoch: Int) async {
         do {
-            let res = try await engine.send(op: op, worksheet: worksheet.toDTO(), params: params)
+            let snapshotRevision = worksheetRevision
+            let snapshot = worksheet.toDTO()
+            let res = try await engine.send(op: op, worksheet: snapshot, params: params)
+            guard !Task.isCancelled, epoch == operationEpoch else { return }
             guard res.ok else { showError(op, res.error ?? "unknown error"); return }
-            if let ws = res.worksheet { setWorksheet(.from(ws)) }
+            if let ws = res.worksheet {
+                if snapshotRevision == worksheetRevision {
+                    setWorksheet(.from(ws))
+                } else {
+                    log("NOTICE — \(op): worksheet changed while the command was running; its worksheet result was not applied.")
+                }
+            }
             append(res.sessionText)
             for g in res.graphs ?? [] {
                 GraphWindows.show(title: g.title, pngBase64: g.png)
             }
             if let t = res.statusTitle { statusText = t }
         } catch {
+            guard !Task.isCancelled, epoch == operationEpoch else { return }
             showError(op, String(describing: error))
         }
+    }
+
+    private func invalidatePendingOperations() {
+        operationEpoch += 1
+        operationSequence += 1
+        operationTail?.cancel()
+        operationTail = nil
     }
 
     func runDescriptives() async {

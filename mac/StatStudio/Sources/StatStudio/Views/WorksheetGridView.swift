@@ -157,6 +157,7 @@ struct WorksheetGridView: NSViewRepresentable {
                 model.worksheet.rows[row].append(contentsOf: Array(repeating: "", count: pad))
             }
             model.worksheet.rows[row][j] = value
+            model.worksheetDidEdit()
 
             // Keep a trailing blank row so there's always room to type (cf. CanUserAddRows).
             let last = model.worksheet.rows.count - 1
@@ -174,6 +175,7 @@ struct WorksheetGridView: NSViewRepresentable {
             if model.worksheet.rows.isEmpty {
                 model.worksheet.rows.append(Array(repeating: "", count: model.worksheet.columnNames.count))
             }
+            model.worksheetDidEdit()
             tableView?.reloadData()
         }
     }

@@ -19,7 +19,7 @@ internal static class OpsTimeSeries
     {
         var (v, name) = Series(req);
         if (v.Length < 3) throw new ArgumentException("Need at least 3 points.");
-        int fc = Int(req, "forecasts", 0);
+        int fc = NonNegativeInt(req, "forecasts", 0);
         var r = Bool(req, "quadratic") ? TimeSeries.QuadraticTrend(v, fc) : TimeSeries.LinearTrend(v, fc);
         res.StatusTitle = $"Trend Analysis of {name}";
         res.SessionText = Out.Raw(TimeSeriesFormatters.Trend(r, name, v.Length));
@@ -29,9 +29,9 @@ internal static class OpsTimeSeries
     public static void MovingAverage(EngineRequest req, EngineResponse res)
     {
         var (v, name) = Series(req);
-        int len = Int(req, "length", 3);
+        int len = PositiveInt(req, "length", 3);
         if (v.Length <= len) throw new ArgumentException("Series shorter than the MA length.");
-        var r = TimeSeries.MovingAverage(v, len, Int(req, "forecasts", 0));
+        var r = TimeSeries.MovingAverage(v, len, NonNegativeInt(req, "forecasts", 0));
         res.StatusTitle = $"Moving Average of {name}";
         res.SessionText = Out.Raw(TimeSeriesFormatters.Smoothing(r, name, v.Length));
         res.AddGraph($"Moving Average of {name}", p => Plots.TimeSeriesFit(p, name, v, r.Fitted, r.Forecasts));
@@ -41,7 +41,8 @@ internal static class OpsTimeSeries
     {
         var (v, name) = Series(req);
         if (v.Length < 2) throw new ArgumentException("Need at least 2 points.");
-        var r = TimeSeries.SingleExp(v, Num(req, "alpha", 0.2), Int(req, "forecasts", 0));
+        var r = TimeSeries.SingleExp(v, Probability(req, "alpha", 0.2),
+            NonNegativeInt(req, "forecasts", 0));
         res.StatusTitle = $"Single Exp Smoothing of {name}";
         res.SessionText = Out.Raw(TimeSeriesFormatters.Smoothing(r, name, v.Length));
         res.AddGraph($"Single Exp Smoothing of {name}", p => Plots.TimeSeriesFit(p, name, v, r.Fitted, r.Forecasts));
@@ -51,7 +52,8 @@ internal static class OpsTimeSeries
     {
         var (v, name) = Series(req);
         if (v.Length < 3) throw new ArgumentException("Need at least 3 points.");
-        var r = TimeSeries.DoubleExp(v, Num(req, "alpha", 0.2), Num(req, "beta", 0.1), Int(req, "forecasts", 0));
+        var r = TimeSeries.DoubleExp(v, Probability(req, "alpha", 0.2),
+            Probability(req, "beta", 0.1), NonNegativeInt(req, "forecasts", 0));
         res.StatusTitle = $"Double Exp Smoothing of {name}";
         res.SessionText = Out.Raw(TimeSeriesFormatters.Smoothing(r, name, v.Length));
         res.AddGraph($"Double Exp Smoothing of {name}", p => Plots.TimeSeriesFit(p, name, v, r.Fitted, r.Forecasts));
@@ -60,8 +62,10 @@ internal static class OpsTimeSeries
     public static void Winters(EngineRequest req, EngineResponse res)
     {
         var (v, name) = Series(req);
-        var r = TimeSeries.Winters(v, Int(req, "period", 12), Num(req, "alpha", 0.2), Num(req, "beta", 0.1),
-            Num(req, "gamma", 0.1), Bool(req, "multiplicative"), Int(req, "forecasts", 0));
+        int period = PositiveInt(req, "period", 12);
+        var r = TimeSeries.Winters(v, period, Probability(req, "alpha", 0.2),
+            Probability(req, "beta", 0.1), Probability(req, "gamma", 0.1),
+            Bool(req, "multiplicative"), NonNegativeInt(req, "forecasts", 0));
         res.StatusTitle = $"Winters' Method of {name}";
         res.SessionText = Out.Raw(TimeSeriesFormatters.Smoothing(r, name, v.Length));
         res.AddGraph($"Winters' Method of {name}", p => Plots.TimeSeriesFit(p, name, v, r.Fitted, r.Forecasts));
@@ -70,7 +74,7 @@ internal static class OpsTimeSeries
     public static void Decompose(EngineRequest req, EngineResponse res)
     {
         var (v, name) = Series(req);
-        int period = Int(req, "period", 12);
+        int period = PositiveInt(req, "period", 12);
         if (v.Length < 2 * period) throw new ArgumentException("Need at least two full seasons.");
         var r = TimeSeries.Decompose(v, period, Bool(req, "multiplicative"));
         res.StatusTitle = $"Decomposition of {name}";
@@ -83,7 +87,9 @@ internal static class OpsTimeSeries
     {
         var (v, name) = Series(req);
         if (v.Length < 4) throw new ArgumentException("Need at least 4 points.");
-        var r = TimeSeries.Autocorrelation(v, Int(req, "maxlag", Math.Min(20, v.Length - 1)));
+        int maxLag = PositiveInt(req, "maxlag", Math.Min(20, v.Length - 1));
+        if (maxLag >= v.Length) throw new ArgumentException("'maxlag' must be less than the series length.");
+        var r = TimeSeries.Autocorrelation(v, maxLag);
         var vals = partial ? r.Pacf : r.Acf;
         string lbl = partial ? "PACF" : "ACF";
         res.StatusTitle = $"{lbl} of {name}";
@@ -94,8 +100,9 @@ internal static class OpsTimeSeries
     public static void Arima(EngineRequest req, EngineResponse res)
     {
         var (v, name) = Series(req);
-        var r = StatStudio.Core.Statistics.Arima.Fit(v, Int(req, "p", 1), Int(req, "d", 1), Int(req, "q", 1),
-            Int(req, "forecasts", 10), Bool(req, "includeConstant", true));
+        var r = StatStudio.Core.Statistics.Arima.Fit(v, NonNegativeInt(req, "p", 1),
+            NonNegativeInt(req, "d", 1), NonNegativeInt(req, "q", 1),
+            NonNegativeInt(req, "forecasts", 10), Bool(req, "includeConstant", true));
         res.StatusTitle = $"ARIMA of {name}";
         res.SessionText = Out.Raw(TimeSeriesFormatters.Arima(r, name));
         if (r.Forecasts.Length > 0)
@@ -106,9 +113,11 @@ internal static class OpsTimeSeries
     public static void Sarima(EngineRequest req, EngineResponse res)
     {
         var (v, name) = Series(req);
-        var r = StatStudio.Core.Statistics.Sarima.Fit(v, Int(req, "p", 1), Int(req, "d", 1), Int(req, "q", 1),
-            Int(req, "sp", 0), Int(req, "sd", 1), Int(req, "sq", 1), Int(req, "season", 12),
-            Int(req, "forecasts", 12), Bool(req, "includeConstant"));
+        var r = StatStudio.Core.Statistics.Sarima.Fit(v, NonNegativeInt(req, "p", 1),
+            NonNegativeInt(req, "d", 1), NonNegativeInt(req, "q", 1),
+            NonNegativeInt(req, "sp", 0), NonNegativeInt(req, "sd", 1),
+            NonNegativeInt(req, "sq", 1), PositiveInt(req, "season", 12),
+            NonNegativeInt(req, "forecasts", 12), Bool(req, "includeConstant"));
         res.StatusTitle = $"SARIMA of {name}";
         res.SessionText = Out.Raw(TimeSeriesFormatters.Sarima(r, name));
         if (r.Forecasts.Length > 0)

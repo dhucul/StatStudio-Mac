@@ -41,6 +41,20 @@ internal static class DataTests
         Check.Equal(quoted.Columns[0][0]!, "Doe, J", "quoted field with comma");
         Check.Equal(quoted.Columns[1][0]!, "a \"b\" c", "escaped quotes");
 
+        var multiline = new Worksheet();
+        multiline.AddColumn("A", ColumnType.Text).Add("line1\nline2");
+        multiline.AddColumn("B", ColumnType.Text).Add("x,y");
+        var multilineText = new StringWriter();
+        WorksheetIo.WriteCsv(multiline, multilineText);
+        var multilineBack = WorksheetIo.ReadCsv(new StringReader(multilineText.ToString()));
+        Check.Equal(multilineBack.RowCount, 1, "quoted newline remains one logical CSV row");
+        Check.Equal(multilineBack.Columns[0][0]!, "line1\nline2", "quoted newline round-trips");
+        Check.Equal(multilineBack.Columns[1][0]!, "x,y", "quoted delimiter round-trips");
+
+        var tabText = new StringWriter();
+        WorksheetIo.WriteCsv(multiline, tabText, '\t');
+        Check.True(tabText.ToString().StartsWith("A\tB\n"), "TSV writer uses tab delimiter");
+
         Check.Section("Excel (.xlsx) round-trip");
         var xw = new Worksheet { Name = "X" };
         var v1 = xw.AddColumn("Val");
@@ -78,6 +92,11 @@ internal static class DataTests
         Check.Close(Calculator.Evaluate("2 * -3", cw2)[0], -6, "unary minus after operator");
         Check.Close(Calculator.Evaluate("2^3^2", cw2)[0], 512, "power is right-associative");
 
+        var missing = new Worksheet();
+        missing.AddColumn("Empty").Add(null);
+        Check.Close(Calculator.Evaluate("N(Empty)", missing)[0], 0, "N(all missing) = 0");
+        Check.Close(Calculator.Evaluate("SUM(Empty)", missing)[0], 0, "SUM(all missing) = 0");
+
         Check.Section("Sample datasets build");
         foreach (var ds in SampleData.All)
         {
@@ -98,6 +117,8 @@ internal static class DataTests
         Check.Equal(pback.ColumnCount, 2, "ssproj columns");
         Check.Equal(pback.Name, "X", "ssproj name");
         Check.Equal(pback.Columns[1][0]!, "p", "ssproj cell");
+        Check.True(!Directory.GetFiles(Path.GetDirectoryName(proj)!, Path.GetFileName(proj) + ".*.tmp").Any(),
+            "atomic project save leaves no temporary file");
         File.Delete(proj);
     }
 }

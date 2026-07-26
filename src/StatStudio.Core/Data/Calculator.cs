@@ -148,7 +148,9 @@ public static class Calculator
             {
                 var vals = new List<double>(_n);
                 for (int r = 0; r < _n; r++) { double v = arg(r); if (!double.IsNaN(v)) vals.Add(v); }
-                double result = vals.Count > 0 ? agg(vals) : double.NaN;
+                bool emptyIsZero = name.Equals("n", StringComparison.OrdinalIgnoreCase) ||
+                                   name.Equals("sum", StringComparison.OrdinalIgnoreCase);
+                double result = vals.Count > 0 || emptyIsZero ? agg(vals) : double.NaN;
                 return _ => result;
             }
             throw new FormatException($"Unknown function '{name}'.");

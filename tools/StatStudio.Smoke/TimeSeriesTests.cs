@@ -25,6 +25,10 @@ internal static class TimeSeriesTests
         Check.Close(ma.Fitted[1], 2.0, "MA at index 1");
         Check.Close(ma.Fitted[2], 3.0, "MA at index 2");
         Check.Close(ma.Fitted[3], 4.0, "MA at index 3");
+        var zeroActual = TimeSeries.MovingAverage(new double[] { 10, 0, 20 }, 2);
+        Check.Close(zeroActual.Accuracy.Mape, 50.0, "MAPE excludes zero actuals from its denominator");
+        Check.Throws<ArgumentException>(() => TimeSeries.MovingAverage(new double[] { 1, 2, 3 }, 0),
+            "moving average rejects zero length");
 
         Check.Section("Single exponential smoothing  {2,4,6}, alpha=0.5");
         var ses = TimeSeries.SingleExp(new double[] { 2, 4, 6 }, 0.5, forecasts: 1);
@@ -69,6 +73,12 @@ internal static class TimeSeriesTests
         Check.Close(ima.Forecasts[0], 11.0, "forecast t=11", 1e-4);
         Check.Close(ima.Forecasts[2], 13.0, "forecast t=13", 1e-4);
 
+        var randomWalk = new double[] { 0, 1, -0.5, 1.5, 1, 2.5, 1.2, 3.1, 2.4, 4.0 };
+        var rw = Arima.Fit(randomWalk, 0, 1, 0, forecasts: 4, includeConstant: false);
+        double width1 = rw.ForecastUpper[0] - rw.ForecastLower[0];
+        double width4 = rw.ForecastUpper[3] - rw.ForecastLower[3];
+        Check.True(width4 > width1 * 1.9, "integrated ARIMA interval widens approximately with sqrt(h)");
+
         Check.Section("ARIMA(0,0,1) MA fit (reasonableness)");
         var rnd = new Random(1);
         var noisy = Enumerable.Range(0, 60).Select(_ => rnd.NextDouble() * 2 - 1).ToArray();
@@ -85,6 +95,13 @@ internal static class TimeSeriesTests
         Check.Close(sar.Forecasts[1], 20, "forecast season 2", 1e-6);
         Check.Close(sar.Forecasts[2], 30, "forecast season 3", 1e-6);
         Check.Close(sar.Forecasts[3], 40, "forecast season 4", 1e-6);
+        var seasonalNoise = new double[] { 10, 20, 30, 40, 11, 19, 32, 39, 9, 22, 29, 42 };
+        var seasonalRw = Sarima.Fit(seasonalNoise, 0, 0, 0, 0, 1, 0, 4,
+            forecasts: 8, includeConstant: false);
+        double seasonalWidth1 = seasonalRw.ForecastUpper[0] - seasonalRw.ForecastLower[0];
+        double seasonalWidth5 = seasonalRw.ForecastUpper[4] - seasonalRw.ForecastLower[4];
+        Check.True(seasonalWidth5 > seasonalWidth1 * 1.3,
+            "seasonally integrated interval widens after one seasonal horizon");
 
         Check.Section("SARIMA(1,0,0)(0,0,0)_1 reduces to AR(1)");
         var sar2 = Sarima.Fit(line, 1, 0, 0, 0, 0, 0, 1);

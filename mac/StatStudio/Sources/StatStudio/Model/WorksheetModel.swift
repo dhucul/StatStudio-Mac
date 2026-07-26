@@ -8,10 +8,11 @@ struct WorksheetModel {
     var rows: [[String]]
 
     static func empty(cols: Int = 8, rows: Int = 20) -> WorksheetModel {
-        let names = (1...cols).map { "C\($0)" }
-        let blank = Array(repeating: "", count: cols)
+        let columnCount = max(cols, 1)
+        let names = (0..<columnCount).map { "C\($0 + 1)" }
+        let blank = Array(repeating: "", count: columnCount)
         return WorksheetModel(name: "Worksheet 1", columnNames: names,
-                              rows: Array(repeating: blank, count: rows))
+                              rows: Array(repeating: blank, count: max(rows, 0)))
     }
 
     /// Column-major DTO for the engine (empty string → null/missing).

@@ -10,7 +10,8 @@ public sealed record MixtureResult(
 /// <summary>Scheffé canonical mixture-model regression (no intercept, since components sum to 1).</summary>
 public static class MixtureAnalysis
 {
-    public static MixtureResult Fit(double[] y, double[][] components, IReadOnlyList<string> names, bool quadratic)
+    public static MixtureResult Fit(double[] y, double[][] components, IReadOnlyList<string> names,
+        bool quadratic, string response = "Y")
     {
         int n = y.Length;
         int q = components.Length;
@@ -61,6 +62,6 @@ public static class MixtureAnalysis
             double pv = tDist != null && !double.IsNaN(t) ? 2 * (1 - tDist.CumulativeDistribution(Math.Abs(t))) : double.NaN;
             terms.Add(new RegressionTerm(termNames[j], coefs[j], se, t, pv));
         }
-        return new MixtureResult("Y", terms, s, r2, r2adj, n, quadratic);
+        return new MixtureResult(response, terms, s, r2, r2adj, n, quadratic);
     }
 }

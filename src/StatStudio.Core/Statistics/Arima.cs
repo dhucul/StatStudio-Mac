@@ -22,6 +22,7 @@ public static class Arima
     {
         if (p < 0 || q < 0 || d < 0 || p > 5 || q > 5 || d > 2)
             throw new ArgumentException("ARIMA orders out of range (p,q ≤ 5, d ≤ 2).");
+        if (forecasts < 0) throw new ArgumentException("Forecast count must be non-negative.");
 
         double[] w = series;
         for (int i = 0; i < d; i++) w = Diff(w);
@@ -173,8 +174,11 @@ public static class Arima
             fc[step] = v;
         }
 
-        // Forecast-error variance from psi-weights of the (differenced) ARMA model.
+        // Forecast-error variance on the original scale. Each inverse difference is
+        // a cumulative sum of the differenced model's impulse-response weights.
         var psi = PsiWeights(theta, p, q, c, h);
+        for (int level = 0; level < d; level++)
+            for (int step = 1; step < h; step++) psi[step] += psi[step - 1];
         var lo = new double[h];
         var hi = new double[h];
         double cumVar = 0;

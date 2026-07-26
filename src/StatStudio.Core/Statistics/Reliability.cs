@@ -76,7 +76,6 @@ public static class Reliability
     public static KaplanMeierResult KaplanMeier(double[] times, bool[] censored)
     {
         int n = times.Length;
-        var order = Enumerable.Range(0, n).OrderBy(i => times[i]).ToArray();
         var distinct = times.Distinct().OrderBy(v => v).ToArray();
 
         var rows = new List<KmRow>();

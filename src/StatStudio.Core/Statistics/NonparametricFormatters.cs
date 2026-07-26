@@ -80,9 +80,11 @@ public static class NonparametricFormatters
     {
         var t = new TextTable("N", "Mean", "StDev", "AD", "P-Value");
         t.Add(r.N.ToString(), Fmt.N(r.Mean), Fmt.N(r.StDev), Fmt.N(r.ASquared, 3), Fmt.P(r.P));
-        string verdict = r.P < 0.05
-            ? "p < 0.05: reject normality."
-            : "p >= 0.05: fail to reject normality.";
+        string verdict = double.IsNaN(r.P)
+            ? "The test is undefined for constant or insufficient data."
+            : r.P < 0.05
+                ? "p < 0.05: reject normality."
+                : "p >= 0.05: fail to reject normality.";
         return $"Anderson-Darling Normality Test: {name}\n\n" + t + "\n\n" + verdict;
     }
 }

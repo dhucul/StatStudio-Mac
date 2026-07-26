@@ -31,7 +31,16 @@ public static class ProjectStore
         var dto = new ProjectDto { Name = ws.Name };
         foreach (var c in ws.Columns)
             dto.Columns.Add(new ColumnDto { Name = c.Name, Type = c.Type, Cells = c.Cells.ToList() });
-        File.WriteAllText(path, JsonSerializer.Serialize(dto, Options));
+        string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllText(temp, JsonSerializer.Serialize(dto, Options));
+            File.Move(temp, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+        }
     }
 
     public static Worksheet Load(string path)

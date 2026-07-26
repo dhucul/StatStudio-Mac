@@ -3,8 +3,15 @@
 # Usage: make-icns.sh <source.png> <out.icns>
 set -euo pipefail
 
+if [[ $# -ne 2 ]]; then
+    echo "Usage: $0 <source.png> <out.icns>" >&2
+    exit 2
+fi
+
 SRC="$1"; OUT="$2"
-WORK="$(mktemp -d)/icon.iconset"
+TMP_ROOT="$(mktemp -d)"
+trap 'rm -rf "$TMP_ROOT"' EXIT
+WORK="$TMP_ROOT/icon.iconset"
 mkdir -p "$WORK"
 
 # iconutil expects exactly these names. Source is 256px; larger sizes upscale.

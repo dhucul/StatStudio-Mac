@@ -30,6 +30,13 @@ internal static class DoeTests
         var frac3 = DoeDesign.FractionalFactorial(3, 4, randomize: false);
         Check.Equal(frac3.Resolution, 3, "2^(3-1) is resolution III");
         Check.True(frac3.RunList.All(r => Math.Abs(r.Factors[2] - r.Factors[0] * r.Factors[1]) < 1e-9), "C = A·B");
+        var fracA = frac3.RunList.Select(r => r.Factors[0]).ToArray();
+        var fracB = frac3.RunList.Select(r => r.Factors[1]).ToArray();
+        var fracC = frac3.RunList.Select(r => r.Factors[2]).ToArray();
+        var fracFit = FactorialAnalysis.Analyze(fracA, new[] { fracA, fracB, fracC }, new[] { "A", "B", "C" });
+        Check.True(fracFit.RSquared <= 1 + 1e-10, "fractional alias classes are counted once in R-squared");
+        Check.True(fracFit.Terms.Any(t => t.Name.Contains("A") && t.Name.Contains("BC")),
+            "fractional analysis reports aliased terms");
 
         Check.Section("DOE — analyze 2^2 (y = 10 + 3A + 2B + 1AB)");
         var a = new double[] { -1, -1, 1, 1 };
@@ -80,6 +87,10 @@ internal static class DoeTests
         var lat = MixtureDesign.SimplexLattice(3, 2, randomize: false);
         Check.Equal(lat.Runs, 6, "simplex-lattice {3,2} = 6 runs");
         Check.True(lat.RunList.All(r => Math.Abs(r.Components.Sum() - 1.0) < 1e-9), "lattice sums to 1");
+        var lat4 = MixtureDesign.SimplexLattice(3, 4, randomize: false);
+        var unequalInterior = lat4.RunList.First(r => r.Components.All(v => v > 0) &&
+                                                      r.Components.Distinct().Count() > 1);
+        Check.Equal(unequalInterior.PointType, "Blend", "unequal interior lattice point is not labeled centroid");
 
         Check.Section("Mixture — Scheffé model recovery");
         var ma = cen.RunList.Select(r => r.Components[0]).ToArray();
@@ -87,7 +98,9 @@ internal static class DoeTests
         var mc = cen.RunList.Select(r => r.Components[2]).ToArray();
         var my = new double[ma.Length];
         for (int i = 0; i < my.Length; i++) my[i] = 2 * ma[i] + 3 * mb[i] + 5 * mc[i] + 4 * ma[i] * mb[i];
-        var mfit = MixtureAnalysis.Fit(my, new[] { ma, mb, mc }, new[] { "A", "B", "C" }, quadratic: true);
+        var mfit = MixtureAnalysis.Fit(my, new[] { ma, mb, mc }, new[] { "A", "B", "C" },
+            quadratic: true, response: "Strength");
+        Check.Equal(mfit.Response, "Strength", "mixture result preserves selected response name");
         RegressionTerm MT(string n) => mfit.Terms.First(t => t.Name == n);
         Check.Close(MT("A").Coef, 2, "beta A");
         Check.Close(MT("B").Coef, 3, "beta B");

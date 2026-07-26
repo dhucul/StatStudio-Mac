@@ -24,6 +24,7 @@ public static class TimeSeries
     public static AcfResult Autocorrelation(double[] y, int maxLag)
     {
         int n = y.Length;
+        if (n == 0 || maxLag < 0) throw new ArgumentException("ACF needs data and a non-negative maximum lag.");
         maxLag = Math.Min(maxLag, n - 1);
         double mean = y.Average();
         double denom = y.Sum(v => (v - mean) * (v - mean));
@@ -59,6 +60,7 @@ public static class TimeSeries
 
     public static TrendResult LinearTrend(double[] y, int forecasts = 0)
     {
+        if (forecasts < 0) throw new ArgumentException("Forecast count must be non-negative.");
         int n = y.Length;
         var t = Enumerable.Range(1, n).Select(i => (double)i).ToArray();
         var reg = Regression.SimpleLinear(t, y, "t", "Y");
@@ -70,6 +72,7 @@ public static class TimeSeries
 
     public static TrendResult QuadraticTrend(double[] y, int forecasts = 0)
     {
+        if (forecasts < 0) throw new ArgumentException("Forecast count must be non-negative.");
         int n = y.Length;
         var t = Enumerable.Range(1, n).Select(i => (double)i).ToArray();
         var reg = RegressionExtensions.Polynomial(t, y, 2, "t", "Y");
@@ -84,6 +87,8 @@ public static class TimeSeries
     public static SmoothingResult MovingAverage(double[] y, int length, int forecasts = 0)
     {
         int n = y.Length;
+        if (length <= 0 || length > n) throw new ArgumentException("Moving-average length must be from 1 through the series length.");
+        if (forecasts < 0) throw new ArgumentException("Forecast count must be non-negative.");
         var fitted = new double[n];
         Array.Fill(fitted, double.NaN);
         bool center = length % 2 == 1;
@@ -108,6 +113,7 @@ public static class TimeSeries
     public static SmoothingResult SingleExp(double[] y, double alpha, int forecasts = 0)
     {
         int n = y.Length;
+        ValidateSmoothing(n, forecasts, ("alpha", alpha));
         var fitted = new double[n];
         Array.Fill(fitted, double.NaN);
         double level = y[0];
@@ -124,6 +130,7 @@ public static class TimeSeries
     public static SmoothingResult DoubleExp(double[] y, double alpha, double beta, int forecasts = 0)
     {
         int n = y.Length;
+        ValidateSmoothing(n, forecasts, ("alpha", alpha), ("beta", beta));
         var fitted = new double[n];
         Array.Fill(fitted, double.NaN);
         double level = y[0];
@@ -137,13 +144,15 @@ public static class TimeSeries
         }
         var fc = Enumerable.Range(1, forecasts).Select(h => level + h * trend).ToArray();
         return new SmoothingResult("Double Exponential Smoothing (Holt)",
-            new[] { ("Alpha", alpha), ("Gamma (trend)", beta) }, fitted, fc, Accuracy(y, fitted));
+            new[] { ("Alpha", alpha), ("Beta (trend)", beta) }, fitted, fc, Accuracy(y, fitted));
     }
 
     public static SmoothingResult Winters(double[] y, int period, double alpha, double beta, double gamma,
         bool multiplicative, int forecasts = 0)
     {
         int n = y.Length;
+        if (period < 2) throw new ArgumentException("Seasonal period must be at least 2.");
+        ValidateSmoothing(n, forecasts, ("alpha", alpha), ("beta", beta), ("gamma", gamma));
         if (n < 2 * period) throw new ArgumentException("Winters needs at least two full seasons of data.");
 
         double level = y.Take(period).Average();
@@ -189,6 +198,8 @@ public static class TimeSeries
     public static DecompositionResult Decompose(double[] y, int period, bool multiplicative)
     {
         int n = y.Length;
+        if (period < 2 || n < 2 * period)
+            throw new ArgumentException("Decomposition needs a period of at least 2 and two full seasons.");
         var trend = new double[n];
         Array.Fill(trend, double.NaN);
         int half = period / 2;
@@ -236,19 +247,29 @@ public static class TimeSeries
     private static AccuracyMeasures Accuracy(double[] actual, double[] fitted)
     {
         double mape = 0, mad = 0, msd = 0;
-        int count = 0;
+        int count = 0, mapeCount = 0;
         for (int i = 0; i < actual.Length; i++)
         {
             if (double.IsNaN(fitted[i])) continue;
             double e = actual[i] - fitted[i];
             mad += Math.Abs(e);
             msd += e * e;
-            if (actual[i] != 0) mape += Math.Abs(e / actual[i]);
+            if (actual[i] != 0) { mape += Math.Abs(e / actual[i]); mapeCount++; }
             count++;
         }
         if (count == 0) return new AccuracyMeasures(double.NaN, double.NaN, double.NaN);
-        return new AccuracyMeasures(100 * mape / count, mad / count, msd / count);
+        return new AccuracyMeasures(mapeCount == 0 ? double.NaN : 100 * mape / mapeCount,
+            mad / count, msd / count);
     }
 
     private static string Round(double v) => v.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static void ValidateSmoothing(int count, int forecasts, params (string Name, double Value)[] coefficients)
+    {
+        if (count == 0) throw new ArgumentException("Smoothing needs at least one observation.");
+        if (forecasts < 0) throw new ArgumentException("Forecast count must be non-negative.");
+        foreach (var (name, value) in coefficients)
+            if (value is < 0 or > 1 || !double.IsFinite(value))
+                throw new ArgumentException($"{name} must be from 0 through 1.");
+    }
 }

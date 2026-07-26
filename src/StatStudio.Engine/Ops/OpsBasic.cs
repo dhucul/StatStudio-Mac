@@ -59,16 +59,21 @@ internal static class OpsBasic
 
     public static void OneProportion(EngineRequest req, EngineResponse res)
     {
-        double p0 = Num(req, "p0", 0.5);
-        var r = HypothesisTests.OneProportion(Int(req, "events1", 0), Int(req, "trials1", 1), p0, Conf(req), Alt(req));
+        double p0 = Probability(req, "p0", 0.5);
+        int events = NonNegativeInt(req, "events1", 0);
+        int trials = PositiveInt(req, "trials1", 1);
+        if (events > trials) throw new ArgumentException("'events1' cannot exceed 'trials1'.");
+        var r = HypothesisTests.OneProportion(events, trials, p0, Conf(req), Alt(req));
         res.StatusTitle = "1 Proportion";
         res.SessionText = Out.Raw(HypothesisFormatters.OneProportion(r, "Sample", p0));
     }
 
     public static void TwoProportions(EngineRequest req, EngineResponse res)
     {
-        var r = HypothesisTests.TwoProportions(Int(req, "events1", 0), Int(req, "trials1", 1),
-                                               Int(req, "events2", 0), Int(req, "trials2", 1), Conf(req), Alt(req));
+        int e1 = NonNegativeInt(req, "events1", 0), n1 = PositiveInt(req, "trials1", 1);
+        int e2 = NonNegativeInt(req, "events2", 0), n2 = PositiveInt(req, "trials2", 1);
+        if (e1 > n1 || e2 > n2) throw new ArgumentException("Events cannot exceed trials.");
+        var r = HypothesisTests.TwoProportions(e1, n1, e2, n2, Conf(req), Alt(req));
         res.StatusTitle = "2 Proportions";
         res.SessionText = Out.Raw(HypothesisFormatters.TwoProportions(r, "Sample 1", "Sample 2"));
     }
@@ -81,6 +86,8 @@ internal static class OpsBasic
         {
             var obs = Require(ws, n).NumericValues();
             if (obs.Length < 2) { sb.Append(Out.Raw($"{n}: need at least 2 categories.")); continue; }
+            if (obs.Any(v => v < 0) || obs.Sum() <= 0)
+                throw new ArgumentException($"{n}: observed counts must be non-negative with a positive total.");
             var r = HypothesisTests.ChiSquareGof(obs);
             var cats = Enumerable.Range(1, obs.Length).Select(i => i.ToString()).ToList();
             sb.Append(Out.Raw($"Goodness-of-Fit for {n}\n" + HypothesisFormatters.ChiSquareGof(r, cats)));
@@ -93,12 +100,18 @@ internal static class OpsBasic
     {
         var ws = Ws(req);
         var names = Strings(req, "columns");
-        var cols = names.Select(n => Require(ws, n).NumericValues()).ToList();
-        int rows = cols.Min(c => c.Length);
-        if (rows < 2) throw new ArgumentException("Need at least 2 rows of counts.");
-        var table = new double[rows, cols.Count];
+        if (names.Length < 2) throw new ArgumentException("Select at least two count columns.");
+        var complete = Columns.Rows(names.Select(n => Require(ws, n)).ToList());
+        if (complete.Count < 2) throw new ArgumentException("Need at least 2 complete rows of counts.");
+        if (complete.Any(row => row.Any(v => v < 0)))
+            throw new ArgumentException("Chi-square counts must be non-negative.");
+        int rows = complete.Count;
+        var table = new double[rows, names.Length];
         for (int i = 0; i < rows; i++)
-            for (int j = 0; j < cols.Count; j++) table[i, j] = cols[j][i];
+            for (int j = 0; j < names.Length; j++) table[i, j] = complete[i][j];
+        if (Enumerable.Range(0, rows).Any(i => Enumerable.Range(0, names.Length).Sum(j => table[i, j]) <= 0) ||
+            Enumerable.Range(0, names.Length).Any(j => Enumerable.Range(0, rows).Sum(i => table[i, j]) <= 0))
+            throw new ArgumentException("Every chi-square row and column must have a positive total.");
         var r = HypothesisTests.ChiSquareAssociation(table);
         var rowLabels = Enumerable.Range(1, rows).Select(i => $"R{i}").ToList();
         res.StatusTitle = "Cross Tabulation & Chi-Square";
@@ -143,7 +156,10 @@ internal static class OpsBasic
 
     public static void Fisher(EngineRequest req, EngineResponse res)
     {
-        var r = FishersExact.Test(Int(req, "a", 0), Int(req, "b", 0), Int(req, "c", 0), Int(req, "d", 0));
+        int a = NonNegativeInt(req, "a", 0), b = NonNegativeInt(req, "b", 0);
+        int c = NonNegativeInt(req, "c", 0), d = NonNegativeInt(req, "d", 0);
+        if ((long)a + b + c + d == 0) throw new ArgumentException("The contingency table must contain observations.");
+        var r = FishersExact.Test(a, b, c, d);
         res.StatusTitle = "Fisher's Exact Test";
         res.SessionText = Out.Raw(MultivariateFormatters.Fisher(r));
     }

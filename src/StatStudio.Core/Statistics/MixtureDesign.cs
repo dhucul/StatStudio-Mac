@@ -60,8 +60,9 @@ public static class MixtureDesign
 
     private static string PointType(double[] pts)
     {
-        int nonzero = pts.Count(v => v > 0);
-        return nonzero == 1 ? "Pure" : nonzero == pts.Length ? "Centroid" : "Blend";
+        var positive = pts.Where(v => v > 0).ToArray();
+        bool equalPositive = positive.All(v => Math.Abs(v - positive[0]) < 1e-12);
+        return positive.Length == 1 ? "Pure" : equalPositive ? "Centroid" : "Blend";
     }
 
     private static MixtureDesignResult Finalize(string type, int q, List<MixtureRun> runs, bool randomize, int seed)

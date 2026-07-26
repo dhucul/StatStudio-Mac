@@ -29,7 +29,7 @@ internal static class OpsMultivariate
         var cols = names.Select(n => Require(ws, n)).ToList();
         var rows = Columns.Rows(cols);
         if (rows.Count < 2) throw new ArgumentException("Not enough complete rows.");
-        var r = FactorAnalysis.Extract(rows.ToArray(), names, Int(req, "factors", 2), Bool(req, "varimax", true));
+        var r = FactorAnalysis.Extract(rows.ToArray(), names, PositiveInt(req, "factors", 2), Bool(req, "varimax", true));
         res.StatusTitle = "Factor Analysis";
         res.SessionText = Out.Raw(MultivariateFormatters.FactorAnalysis(r));
     }
@@ -40,7 +40,7 @@ internal static class OpsMultivariate
         var names = Strings(req, "columns");
         var cols = names.Select(n => Require(ws, n)).ToList();
         var rows = Columns.Rows(cols);
-        int k = Int(req, "k", 3);
+        int k = PositiveInt(req, "k", 3);
         if (rows.Count < k) throw new ArgumentException("Need at least k complete rows.");
         var r = StatStudio.Core.Statistics.KMeans.Cluster(rows.ToArray(), k, names);
         res.StatusTitle = "K-Means Clustering";
@@ -57,6 +57,8 @@ internal static class OpsMultivariate
         var t = Require(ws, col).NumericValues();
         if (t.Length < 3) throw new ArgumentException("Need at least 3 observations.");
         var dist = Str(req, "distribution") ?? "Weibull";
+        if (dist is not ("Weibull" or "Exponential" or "Lognormal" or "Normal"))
+            throw new ArgumentException($"Unknown distribution '{dist}'.");
         if (dist != "Normal" && t.Any(v => v <= 0))
             throw new ArgumentException($"{dist} requires all times > 0.");
         var fit = dist switch
@@ -91,10 +93,13 @@ internal static class OpsMultivariate
         else
         {
             var (tv, cv) = Columns.Pairwise(Require(ws, timesCol), Require(ws, censorCol));
+            if (cv.Any(v => v != 0 && v != 1))
+                throw new ArgumentException("Censor values must be 0 (event) or 1 (censored).");
             times = tv;
             censored = cv.Select(v => v == 1).ToArray();
         }
         if (times.Length < 2) throw new ArgumentException("Need at least 2 observations.");
+        if (times.Any(v => v < 0)) throw new ArgumentException("Survival times must be non-negative.");
         var km = Reliability.KaplanMeier(times, censored);
         res.StatusTitle = $"Kaplan-Meier Survival of {timesCol}";
         res.SessionText = Out.Raw(ReliabilityFormatters.KaplanMeier(km, timesCol));
@@ -105,9 +110,10 @@ internal static class OpsMultivariate
 
     public static void PowerSampleSize(EngineRequest req, EngineResponse res)
     {
-        int testIndex = Int(req, "testIndex", 0);
+        int testIndex = NonNegativeInt(req, "testIndex", 0);
+        if (testIndex > 2) throw new ArgumentException("'testIndex' must be 0, 1, or 2.");
         bool solveForPower = Bool(req, "solveForPower");
-        double alpha = Num(req, "alpha", 0.05);
+        double alpha = Probability(req, "alpha", 0.05, open: true);
         var alt = Alt(req);
         string test = testIndex switch { 1 => "2-Sample t", 2 => "1 Proportion", _ => "1-Sample t" };
         string solveFor = solveForPower ? "power" : "sample size";
@@ -116,24 +122,27 @@ internal static class OpsMultivariate
 
         if (testIndex == 2)
         {
-            double p0 = Num(req, "p0", 0.5), p1 = Num(req, "p1", 0.6);
+            double p0 = Probability(req, "p0", 0.5), p1 = Probability(req, "p1", 0.6);
+            if (p0 == p1) throw new ArgumentException("'p0' and 'p1' must differ.");
+            if ((alt == Alternative.Greater && p1 <= p0) || (alt == Alternative.Less && p1 >= p0))
+                throw new ArgumentException("'p1' must point in the direction of the one-sided alternative.");
             effectDesc = $"p0 = {p0}, p1 = {p1}";
-            if (solveForPower) { n = Num(req, "n", 30); power = Power.OneProportionPower(n, p0, p1, alpha, alt); }
-            else { power = Num(req, "targetPower", 0.8); n = Power.OneProportionSampleSize(power, p0, p1, alpha, alt); }
+            if (solveForPower) { n = PositiveNum(req, "n", 30); power = Power.OneProportionPower(n, p0, p1, alpha, alt); }
+            else { power = Probability(req, "targetPower", 0.8, open: true); n = Power.OneProportionSampleSize(power, p0, p1, alpha, alt); }
         }
         else
         {
-            double d = Num(req, "effectSize", 0.5);
+            double d = PositiveNum(req, "effectSize", 0.5);
             effectDesc = $"d = {d}";
             bool two = testIndex == 1;
             if (solveForPower)
             {
-                n = Num(req, "n", 30);
+                n = PositiveNum(req, "n", 30);
                 power = two ? Power.TwoSampleTPower(n, d, alpha, alt) : Power.OneSampleTPower(n, d, alpha, alt);
             }
             else
             {
-                power = Num(req, "targetPower", 0.8);
+                power = Probability(req, "targetPower", 0.8, open: true);
                 n = two ? Power.TwoSampleTSampleSize(power, d, alpha, alt) : Power.OneSampleTSampleSize(power, d, alpha, alt);
             }
         }
@@ -143,8 +152,10 @@ internal static class OpsMultivariate
 
     public static void BayesProportion(EngineRequest req, EngineResponse res)
     {
-        var r = Bayes.Proportion(Int(req, "x", 0), Int(req, "n", 1), Num(req, "priorA", 1), Num(req, "priorB", 1),
-            Conf(req), Num(req, "threshold", 0.5));
+        int x = NonNegativeInt(req, "x", 0), n = PositiveInt(req, "n", 1);
+        if (x > n) throw new ArgumentException("'x' cannot exceed 'n'.");
+        var r = Bayes.Proportion(x, n, PositiveNum(req, "priorA", 1), PositiveNum(req, "priorB", 1),
+            Conf(req), Probability(req, "threshold", 0.5));
         res.StatusTitle = "Bayesian Proportion";
         res.SessionText = Out.Raw(BayesFormatters.Proportion(r, "Sample"));
     }
@@ -156,8 +167,8 @@ internal static class OpsMultivariate
         var v = Require(ws, col).NumericValues();
         if (v.Length < 2) throw new ArgumentException("Need at least 2 values.");
         var r = Bool(req, "knownVariance")
-            ? Bayes.NormalMeanKnownVar(v, Num(req, "priorMean", 0), Num(req, "priorSd", 1),
-                                       Num(req, "knownSigma", 1), Conf(req), Num(req, "threshold", 0))
+            ? Bayes.NormalMeanKnownVar(v, Num(req, "priorMean", 0), PositiveNum(req, "priorSd", 1),
+                                       PositiveNum(req, "knownSigma", 1), Conf(req), Num(req, "threshold", 0))
             : Bayes.NormalMeanUnknownVar(v, Conf(req), Num(req, "threshold", 0));
         res.StatusTitle = "Bayesian Normal Mean";
         res.SessionText = Out.Raw(BayesFormatters.NormalMean(r, col));

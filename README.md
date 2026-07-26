@@ -5,7 +5,7 @@ A Minitab-style statistics workbench, **native for Apple Silicon (macOS, arm64)*
 StatStudio is a native **SwiftUI / AppKit** application backed by a bundled **.NET 10**
 statistics engine. The Swift app is pure UI; all of the math and all of the graphs come
 from the engine, so results are numerically identical to the Windows edition (the engine
-is the same code, verified by a 309-check reference suite).
+is the same code, verified by a 332-check reference suite).
 
 > This is the macOS port. The original Windows (.NET 10 + WPF) edition lives at
 > **[dhucul/StatStudio](https://github.com/dhucul/StatStudio)**; this repo shares only the
@@ -48,7 +48,7 @@ StatStudio.app  (native macOS bundle, arm64)
 | `src/StatStudio.Core`   | Pure, UI-free statistics engine (Math.NET, ClosedXML). Cross-platform. |
 | `src/StatStudio.Engine` | .NET 10 JSON-RPC helper wrapping Core; ~60 ops; headless ScottPlot→PNG. |
 | `mac/StatStudio`        | The native SwiftUI app (Swift Package). |
-| `tools/StatStudio.Smoke`| 309 deterministic numeric self-tests against reference values. |
+| `tools/StatStudio.Smoke`| 332 deterministic numeric and edge-case checks against reference values. |
 | `scripts/`              | Build / package / run scripts. |
 
 ## Prerequisites
@@ -59,7 +59,8 @@ StatStudio.app  (native macOS bundle, arm64)
 ## Build / run / test
 ```bash
 # Prove the engine math:
-dotnet run --project tools/StatStudio.Smoke -c Release      # 309 checks
+dotnet run --project tools/StatStudio.Smoke -c Release      # 332 checks
+(cd mac/StatStudio && swift test)                            # Swift IPC/lifecycle tests
 
 # Develop (builds engine + app, launches the window):
 scripts/run-mac-dev.sh

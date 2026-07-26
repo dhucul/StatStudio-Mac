@@ -10,7 +10,8 @@ set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST="$REPO/dist"
 APP="$DIST/StatStudio.app"
-VERSION="2.1.0"
+VERSION="$(sed -nE 's:.*<Version>([^<]+)</Version>.*:\1:p' "$REPO/Directory.Build.props")"
+[[ -n "$VERSION" ]] || { echo "Unable to read Version from Directory.Build.props" >&2; exit 1; }
 ID="ca.eastlink.statstudio"
 
 if [[ "${1:-}" == "--rebuild" || ! -d "$APP" ]]; then

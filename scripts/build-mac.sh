@@ -9,7 +9,8 @@ export DOTNET_ROOT="${DOTNET_ROOT:-$HOME/.dotnet}"
 export PATH="$DOTNET_ROOT:$PATH"
 export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
 
-VERSION="2.1.0"
+VERSION="$(sed -nE 's:.*<Version>([^<]+)</Version>.*:\1:p' "$REPO/Directory.Build.props")"
+[[ -n "$VERSION" ]] || { echo "Unable to read Version from Directory.Build.props" >&2; exit 1; }
 DIST="$REPO/dist"
 APP="$DIST/StatStudio.app"
 RID="osx-arm64"

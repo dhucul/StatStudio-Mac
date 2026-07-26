@@ -10,6 +10,8 @@ public static class FishersExact
     /// <summary>Fisher's exact test for a 2×2 table [[a,b],[c,d]] (hypergeometric).</summary>
     public static FisherResult Test(int a, int b, int c, int d)
     {
+        if (a < 0 || b < 0 || c < 0 || d < 0 || (long)a + b + c + d == 0)
+            throw new ArgumentException("Fisher's exact test needs non-negative cells and a positive total.");
         int r1 = a + b, r2 = c + d, c1 = a + c, n = a + b + c + d;
         int lo = Math.Max(0, c1 - r2), hi = Math.Min(r1, c1);
 

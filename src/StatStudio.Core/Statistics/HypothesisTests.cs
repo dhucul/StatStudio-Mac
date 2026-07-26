@@ -102,6 +102,8 @@ public static class HypothesisTests
     public static OnePropResult OneProportion(int x, int n, double p0 = 0.5,
         double conf = 0.95, Alternative alt = Alternative.TwoSided)
     {
+        if (n <= 0 || x < 0 || x > n || p0 is < 0 or > 1 || conf is <= 0 or >= 1)
+            throw new ArgumentException("Proportion inputs require 0 ≤ x ≤ n, n > 0, and valid p0/confidence.");
         double phat = (double)x / n;
         double seTest = Math.Sqrt(p0 * (1 - p0) / n);
         double z = seTest > 0 ? (phat - p0) / seTest : double.NaN;
@@ -116,6 +118,8 @@ public static class HypothesisTests
     public static TwoPropResult TwoProportions(int x1, int n1, int x2, int n2,
         double conf = 0.95, Alternative alt = Alternative.TwoSided)
     {
+        if (n1 <= 0 || n2 <= 0 || x1 < 0 || x1 > n1 || x2 < 0 || x2 > n2 || conf is <= 0 or >= 1)
+            throw new ArgumentException("Proportion inputs require 0 ≤ x ≤ n, n > 0, and valid confidence.");
         double p1 = (double)x1 / n1, p2 = (double)x2 / n2, diff = p1 - p2;
         double pPool = (double)(x1 + x2) / (n1 + n2);
         double seTest = Math.Sqrt(pPool * (1 - pPool) * (1.0 / n1 + 1.0 / n2));

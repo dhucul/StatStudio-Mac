@@ -49,10 +49,21 @@ public static class Power
 
     public static double OneProportionPower(double n, double p0, double p1, double alpha, Alternative alt)
     {
+        if (n <= 0 || p0 is < 0 or > 1 || p1 is < 0 or > 1 || alpha is <= 0 or >= 1)
+            throw new ArgumentException("n must be positive; p0, p1, and alpha must be valid probabilities.");
         double zc = Zc(alpha, alt);
         double se0 = Math.Sqrt(p0 * (1 - p0)), se1 = Math.Sqrt(p1 * (1 - p1));
         if (se1 <= 0) return double.NaN;
-        return Normal.CDF(0, 1, (Math.Abs(p1 - p0) * Math.Sqrt(n) - zc * se0) / se1);
+        double nullSe = se0 / Math.Sqrt(n);
+        double altSe = se1 / Math.Sqrt(n);
+        double lower = p0 - zc * nullSe;
+        double upper = p0 + zc * nullSe;
+        return alt switch
+        {
+            Alternative.Less => Normal.CDF(p1, altSe, lower),
+            Alternative.Greater => 1 - Normal.CDF(p1, altSe, upper),
+            _ => Normal.CDF(p1, altSe, lower) + 1 - Normal.CDF(p1, altSe, upper),
+        };
     }
 
     public static double OneProportionSampleSize(double power, double p0, double p1, double alpha, Alternative alt)

@@ -27,6 +27,8 @@ public static class Pca
             double ss = 0;
             for (int i = 0; i < n; i++) ss += (data[i][j] - means[j]) * (data[i][j] - means[j]);
             sds[j] = Math.Sqrt(ss / (n - 1));
+            if (correlation && sds[j] <= 0)
+                throw new ArgumentException($"Variable '{names[j]}' is constant.");
         }
 
         var m = Matrix<double>.Build.Dense(p, p);

@@ -12,10 +12,16 @@ public static class KMeans
     {
         int n = data.Length, p = names.Count;
         if (k < 2 || k > n) throw new ArgumentException("k must be between 2 and the number of observations.");
+        if (maxIter <= 0) throw new ArgumentException("Maximum iterations must be positive.");
+        if (p == 0 || data.Any(row => row.Length != p || row.Any(v => !double.IsFinite(v))))
+            throw new ArgumentException("All observations must contain one finite value for every variable.");
+        int distinct = data.Select(PointKey).Distinct(StringComparer.Ordinal).Count();
+        if (distinct < k)
+            throw new ArgumentException($"k={k} exceeds the {distinct} distinct observation(s).");
 
         var rnd = new Random(seed);
         var centroids = SeedPlusPlus(data, k, p, rnd);
-        var assign = new int[n];
+        var assign = Enumerable.Repeat(-1, n).ToArray();
         int iter = 0;
 
         for (; iter < maxIter; iter++)
@@ -41,8 +47,21 @@ public static class KMeans
                 for (int j = 0; j < p; j++) sum[assign[i]][j] += data[i][j];
             }
             for (int c = 0; c < k; c++)
-                if (cnt[c] > 0)
-                    for (int j = 0; j < p; j++) centroids[c][j] = sum[c][j] / cnt[c];
+            {
+                if (cnt[c] != 0) continue;
+                int chosen = Enumerable.Range(0, n)
+                    .Where(i => cnt[assign[i]] > 1)
+                    .MaxBy(i => Dist2(data[i], centroids[assign[i]]));
+                int donor = assign[chosen];
+                cnt[donor]--;
+                for (int j = 0; j < p; j++) sum[donor][j] -= data[chosen][j];
+                assign[chosen] = c;
+                cnt[c] = 1;
+                sum[c] = (double[])data[chosen].Clone();
+                changed = true;
+            }
+            for (int c = 0; c < k; c++)
+                for (int j = 0; j < p; j++) centroids[c][j] = sum[c][j] / cnt[c];
 
             if (!changed) { iter++; break; }
         }
@@ -82,4 +101,7 @@ public static class KMeans
         for (int j = 0; j < a.Length; j++) { double d = a[j] - b[j]; s += d * d; }
         return s;
     }
+
+    private static string PointKey(double[] point) =>
+        string.Join(",", point.Select(v => (v == 0 ? 0 : BitConverter.DoubleToInt64Bits(v)).ToString("X16")));
 }

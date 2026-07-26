@@ -65,6 +65,7 @@ public static class ControlCharts
 
     public static SpcChart PChart(int[] defectives, int[] sizes)
     {
+        ValidateAttributeInputs(defectives, sizes, defectivesBoundedBySize: true);
         int k = defectives.Length;
         double totalD = defectives.Sum();
         double totalN = sizes.Sum();
@@ -77,7 +78,7 @@ public static class ControlCharts
         {
             p[i] = (double)defectives[i] / sizes[i];
             double sigma = Math.Sqrt(pbar * (1 - pbar) / sizes[i]);
-            ucl[i] = pbar + 3 * sigma;
+            ucl[i] = Math.Min(1, pbar + 3 * sigma);
             lcl[i] = Math.Max(0, pbar - 3 * sigma);
         }
         return Build("P Chart", "Proportion", pbar, p, ucl, lcl);
@@ -85,17 +86,21 @@ public static class ControlCharts
 
     public static SpcChart NPChart(int[] defectives, int n)
     {
+        if (n <= 0 || defectives.Length < 2 || defectives.Any(d => d < 0 || d > n))
+            throw new ArgumentException("NP chart needs at least two integer counts from 0 through subgroup size n.");
         int k = defectives.Length;
         var counts = defectives.Select(d => (double)d).ToArray();
         double npbar = counts.Average();
         double pbar = npbar / n;
         double sigma = Math.Sqrt(npbar * (1 - pbar));
         return Build("NP Chart", "Count", npbar, counts,
-            npbar + 3 * sigma, Math.Max(0, npbar - 3 * sigma));
+            Math.Min(n, npbar + 3 * sigma), Math.Max(0, npbar - 3 * sigma));
     }
 
     public static SpcChart CChart(int[] counts)
     {
+        if (counts.Length < 2 || counts.Any(v => v < 0))
+            throw new ArgumentException("C chart needs at least two non-negative counts.");
         var c = counts.Select(v => (double)v).ToArray();
         double cbar = c.Average();
         double sigma = Math.Sqrt(cbar);
@@ -105,6 +110,7 @@ public static class ControlCharts
 
     public static SpcChart UChart(int[] counts, int[] sizes)
     {
+        ValidateAttributeInputs(counts, sizes, defectivesBoundedBySize: false);
         int k = counts.Length;
         double ubar = (double)counts.Sum() / sizes.Sum();
         var u = new double[k];
@@ -146,11 +152,12 @@ public static class ControlCharts
         }
 
         // Nelson Test 2: nine consecutive points on the same side of the center line.
-        int run = 0; bool above = false;
+        int run = 0, previousSide = 0;
         for (int i = 0; i < k; i++)
         {
-            bool a = values[i] > center;
-            if (i == 0 || a != above) { run = 1; above = a; }
+            int side = Math.Sign(values[i] - center);
+            if (side == 0) { run = 0; previousSide = 0; continue; }
+            if (run == 0 || side != previousSide) { run = 1; previousSide = side; }
             else run++;
             if (run >= 9)
                 for (int j = i - 8; j <= i; j++) { ooc[j] = true; signals[j] = AddSignal(signals[j], "2"); }
@@ -161,6 +168,16 @@ public static class ControlCharts
 
     private static string AddSignal(string existing, string code) =>
         string.IsNullOrEmpty(existing) ? code : existing + "," + code;
+
+    private static void ValidateAttributeInputs(int[] counts, int[] sizes, bool defectivesBoundedBySize)
+    {
+        if (counts.Length != sizes.Length || counts.Length < 2)
+            throw new ArgumentException("Attribute charts need at least two row-aligned counts and subgroup sizes.");
+        if (sizes.Any(n => n <= 0) || counts.Any(v => v < 0))
+            throw new ArgumentException("Counts must be non-negative and subgroup sizes must be positive.");
+        if (defectivesBoundedBySize && counts.Where((count, i) => count > sizes[i]).Any())
+            throw new ArgumentException("Defective counts cannot exceed subgroup sizes.");
+    }
 
     private static int RequireEqualSize(IReadOnlyList<double[]> subgroups)
     {

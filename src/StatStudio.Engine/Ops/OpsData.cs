@@ -23,7 +23,8 @@ internal static class OpsData
         var path = StrReq(req, "path");
         var ws = Ws(req);
         if (path.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)) WorksheetIo.WriteXlsx(ws, path);
-        else WorksheetIo.WriteCsv(ws, path);
+        else WorksheetIo.WriteCsv(ws, path,
+            path.EndsWith(".tsv", StringComparison.OrdinalIgnoreCase) ? '\t' : ',');
         res.StatusTitle = "Saved";
         res.SessionText = Out.Raw($"Saved worksheet to '{Path.GetFileName(path)}'.");
     }
