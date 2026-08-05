@@ -69,7 +69,12 @@ public static class MultivariateFormatters
         var test = new TextTable("Two-sided P", "Less P", "Greater P", "Odds Ratio");
         test.Add(Fmt.P(r.PTwoSided), Fmt.P(r.PLess), Fmt.P(r.PGreater),
             double.IsInfinity(r.OddsRatio) ? "inf" : Fmt.N(r.OddsRatio, 4));
-        return "Fisher's Exact Test (2×2)\n\n" + t + "\n\n" + test;
+        // An approximated p-value must never read as an exact one.
+        string header = r.Approximate
+            ? "Fisher's Exact Test (2×2)\n(normal approximation with continuity correction — " +
+              "the table is too large to enumerate exactly)"
+            : "Fisher's Exact Test (2×2)";
+        return header + "\n\n" + t + "\n\n" + test;
     }
 
     public static string Power(string test, string solveFor, double alpha, Alternative alt,

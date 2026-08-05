@@ -118,6 +118,9 @@ actor EngineClient {
     }
 
     private func readLine() async throws -> Data {
+        // One deadline for the whole response. Re-arming the timeout per chunk lets an
+        // engine that dribbles a byte at a time hold the connection open forever.
+        let deadline = Date().addingTimeInterval(responseTimeout)
         while true {
             if let nl = buffer.firstIndex(of: 0x0a) {
                 let line = buffer.subdata(in: buffer.startIndex..<nl)
@@ -126,14 +129,21 @@ actor EngineClient {
                 return line
             }
             guard let reader = outRead else { throw EngineError.disconnected }
-            let timeout = responseTimeout
+            let remaining = deadline.timeIntervalSinceNow
+            guard remaining > 0 else { throw EngineError.timeout }
             let chunk = try await withCheckedThrowingContinuation {
                 (continuation: CheckedContinuation<Data, Error>) in
                 let completion = ReadCompletion(continuation)
-                DispatchQueue.global(qos: .userInitiated).async {
-                    completion.resume(returning: reader.availableData)
+                // A readability handler parks no thread in a blocking read, so a timed-out
+                // request cannot strand one on a descriptor we are about to release — and
+                // cannot have its orphaned read steal bytes from the next pipe if the fd
+                // number gets recycled. Detaching is left to the handler itself and to
+                // resetConnection(), both of which run without racing this closure.
+                reader.readabilityHandler = { handle in
+                    handle.readabilityHandler = nil
+                    completion.resume(returning: handle.availableData)
                 }
-                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeout) {
+                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + remaining) {
                     completion.resume(throwing: EngineError.timeout)
                 }
             }
@@ -143,11 +153,16 @@ actor EngineClient {
     }
 
     private func resetConnection() {
+        // Detach first: a handler firing against a closed handle raises an Objective-C
+        // exception, which Swift cannot catch and which would take the app down.
+        outRead?.readabilityHandler = nil
+        // Closing stdin makes the engine's ReadLine loop see EOF and exit on its own.
         try? inWrite?.close()
-        try? outRead?.close()
         if process?.isRunning == true { process?.terminate() }
         process = nil
         inWrite = nil
+        // Deliberately not closed here: an in-flight handler still holds this handle, so
+        // releasing our reference lets it close on deinit once nothing is using it.
         outRead = nil
         buffer.removeAll(keepingCapacity: true)
     }

@@ -17,6 +17,7 @@ internal static class Program
         DoeTests.Run();
         FaRelTests.Run();
         BayesMixedTests.Run();
+        RegressionTests.Run();
         return Check.Summary();
     }
 }

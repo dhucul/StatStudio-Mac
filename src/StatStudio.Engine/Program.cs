@@ -14,6 +14,23 @@ while ((line = Console.In.ReadLine()) is not null)
     if (string.IsNullOrWhiteSpace(line)) continue;
 
     EngineResponse res;
+    // Recover the id before the typed parse: the client correlates strictly by id, so a
+    // parse failure reported against id 0 reads to it as a protocol desync rather than
+    // the error it actually is.
+    int requestId = 0;
+    try
+    {
+        using (var probe = JsonDocument.Parse(line))
+        {
+            if (probe.RootElement.ValueKind == JsonValueKind.Object &&
+                probe.RootElement.TryGetProperty("id", out var idElement) &&
+                idElement.ValueKind == JsonValueKind.Number &&
+                idElement.TryGetInt32(out var parsedId))
+                requestId = parsedId;
+        }
+    }
+    catch (JsonException) { /* unparseable line: fall back to id 0 */ }
+
     try
     {
         var req = JsonSerializer.Deserialize<EngineRequest>(line, EngineJson.Options)
@@ -22,7 +39,7 @@ while ((line = Console.In.ReadLine()) is not null)
     }
     catch (Exception ex)
     {
-        res = new EngineResponse { Id = 0, Ok = false, Error = "parse error: " + ex.Message };
+        res = new EngineResponse { Id = requestId, Ok = false, Error = "parse error: " + ex.Message };
     }
 
     stdout.WriteLine(JsonSerializer.Serialize(res, EngineJson.Options));

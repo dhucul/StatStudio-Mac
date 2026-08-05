@@ -46,11 +46,24 @@ final class AppModel: ObservableObject {
 
     // ---- Session output (mirrors MainWindow.Log/Output/OutputRaw) ----------
 
-    func log(_ text: String) { sessionText += text + "\n" }
+    /// Session output is one `@Published` string re-laid-out in full on every append, so
+    /// an unbounded log turns each analysis into a progressively slower full re-render.
+    private static let sessionLimit = 400_000
+
+    func log(_ text: String) {
+        sessionText += text + "\n"
+        trimSession()
+    }
 
     func append(_ block: String?) {
         guard let block, !block.isEmpty else { return }
         sessionText += block
+        trimSession()
+    }
+
+    private func trimSession() {
+        guard sessionText.count > Self.sessionLimit else { return }
+        sessionText = String(sessionText.suffix(Self.sessionLimit / 2))
     }
 
     func showError(_ title: String, _ message: String) {
@@ -193,7 +206,9 @@ final class AppModel: ObservableObject {
         operationEpoch += 1
         operationSequence += 1
         operationTail?.cancel()
-        operationTail = nil
+        // The tail deliberately stays: the epoch guard already discards stale results, and
+        // dropping it would unchain the queue, letting the next op race ahead of requests
+        // still in flight inside the engine actor.
     }
 
     func runDescriptives() async {

@@ -11,10 +11,14 @@ internal static class Render
 {
     public static GraphImage Graph(string title, Action<Plot> build, int width = 820, int height = 560)
     {
-        var plot = new Plot();
+        // Plot and Image both own unmanaged SkiaSharp resources. The engine is a
+        // long-lived process, so leaving them to the finalizer leaks native memory
+        // that GC pressure never accounts for.
+        using var plot = new Plot();
         Plots.ApplyTheme(plot);
         build(plot);
-        byte[] bytes = plot.GetImage(width, height).GetImageBytes();
+        using var image = plot.GetImage(width, height);
+        byte[] bytes = image.GetImageBytes();
         return new GraphImage { Title = title, Png = Convert.ToBase64String(bytes) };
     }
 }

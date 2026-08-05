@@ -156,11 +156,18 @@ public static class WorksheetIo
         return anyValue;
     }
 
+    /// <summary>
+    /// Sniffs the delimiter from the first few records. Sampling only the header row
+    /// misreads files whose heading has no delimiter, and an all-zero tally must resolve
+    /// to comma explicitly rather than relying on the sort being stable.
+    /// </summary>
     private static char DetectDelimiter(string text)
     {
+        const int SampleRecords = 5;
         var counts = Delimiters.ToDictionary(d => d, _ => 0);
         bool inQuotes = false;
-        for (int i = 0; i < text.Length; i++)
+        int records = 0;
+        for (int i = 0; i < text.Length && records < SampleRecords; i++)
         {
             char c = text[i];
             if (c == '"')
@@ -168,9 +175,14 @@ public static class WorksheetIo
                 if (inQuotes && i + 1 < text.Length && text[i + 1] == '"') { i++; continue; }
                 inQuotes = !inQuotes;
             }
-            else if (!inQuotes && (c == '\r' || c == '\n')) break;
+            else if (!inQuotes && (c == '\r' || c == '\n'))
+            {
+                if (c == '\r' && i + 1 < text.Length && text[i + 1] == '\n') i++;
+                records++;
+            }
             else if (!inQuotes && counts.ContainsKey(c)) counts[c]++;
         }
+        if (counts.Values.Max() == 0) return ',';
         return Delimiters.OrderByDescending(d => counts[d]).First();
     }
 

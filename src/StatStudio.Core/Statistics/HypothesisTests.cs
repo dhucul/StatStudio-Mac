@@ -70,7 +70,9 @@ public static class HypothesisTests
             se = Math.Sqrt(v1 / n1 + v2 / n2);
             double num = Math.Pow(v1 / n1 + v2 / n2, 2);
             double den = Math.Pow(v1 / n1, 2) / (n1 - 1) + Math.Pow(v2 / n2, 2) / (n2 - 1);
-            df = num / den;
+            // Both samples constant -> 0/0. A NaN df would blow up the StudentT used for
+            // the CI, so fall back to the pooled df and let the NaN t/p report the tie.
+            df = den > 0 ? num / den : n1 + n2 - 2;
         }
 
         double t = se > 0 ? diff / se : double.NaN;

@@ -57,6 +57,11 @@ public static class Calculator
         private readonly int _n;
         private readonly Dictionary<int, double[]> _colCache = new();
         private int _pos;
+        private int _depth;
+
+        // ParseAtom recurses once per '('. StackOverflowException cannot be caught, so a
+        // deeply-nested expression would take the whole engine process down with it.
+        private const int MaxDepth = 200;
 
         public Parser(string s, Worksheet ws) { _s = s; _ws = ws; _n = ws.RowCount; }
 
@@ -109,13 +114,19 @@ public static class Calculator
 
         private Func<int, double> ParseAtom()
         {
-            SkipWs();
-            char c = Peek();
-            if (c == '(') { _pos++; var e = ParseExpr(); SkipWs(); Expect(')'); return e; }
-            if (c == '\'') return Column(ReadQuoted());
-            if (char.IsDigit(c) || c == '.') return Number();
-            if (char.IsLetter(c)) return Identifier();
-            throw new FormatException($"Unexpected character '{c}' at position {_pos}.");
+            if (++_depth > MaxDepth)
+                throw new FormatException("Expression is nested too deeply.");
+            try
+            {
+                SkipWs();
+                char c = Peek();
+                if (c == '(') { _pos++; var e = ParseExpr(); SkipWs(); Expect(')'); return e; }
+                if (c == '\'') return Column(ReadQuoted());
+                if (char.IsDigit(c) || c == '.') return Number();
+                if (char.IsLetter(c)) return Identifier();
+                throw new FormatException($"Unexpected character '{c}' at position {_pos}.");
+            }
+            finally { _depth--; }
         }
 
         private Func<int, double> Number()
@@ -165,6 +176,8 @@ public static class Calculator
 
         private int ResolveColumn(string name)
         {
+            // An empty quoted name ('') would index past the end below.
+            if (string.IsNullOrEmpty(name)) throw new FormatException("Empty column name.");
             if ((name[0] == 'C' || name[0] == 'c') && int.TryParse(name[1..], out int cn) && cn >= 1 && cn <= _ws.ColumnCount)
                 return cn - 1;
             int byName = _ws.IndexOf(name);

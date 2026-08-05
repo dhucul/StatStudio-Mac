@@ -210,6 +210,11 @@ public static class Arima
 
     private static double[] Diff(double[] x)
     {
+        // Guard here rather than at the call site: differencing runs before the
+        // order/length check, so a short series would otherwise allocate a
+        // negative-length array and surface as an opaque OverflowException.
+        if (x.Length < 2)
+            throw new ArgumentException("Series is too short to difference at the requested order.");
         var r = new double[x.Length - 1];
         for (int i = 0; i < r.Length; i++) r[i] = x[i + 1] - x[i];
         return r;

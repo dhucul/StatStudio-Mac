@@ -232,6 +232,12 @@ public static class Sarima
 
     private static double[] Diff(double[] x, int lag)
     {
+        // Seasonal differencing needs more than `lag` points; without this a short
+        // series allocates a negative-length array (opaque OverflowException) before
+        // the order/length check downstream ever runs.
+        if (x.Length <= lag)
+            throw new ArgumentException(
+                $"Series is too short to difference at lag {lag} (needs more than {lag} observations).");
         var r = new double[x.Length - lag];
         for (int i = 0; i < r.Length; i++) r[i] = x[i + lag] - x[i];
         return r;

@@ -52,6 +52,10 @@ public static class AnovaExtensions
         double ssTotal = response.Sum(v => (v - grand) * (v - grand));
 
         int dfA = a - 1, dfB = b - 1, dfAB = (a - 1) * (b - 1), dfError = a * b * (n - 1), dfTotal = N - 1;
+        // A single-level factor gives df 0 and a 0/0 mean square, which would print an
+        // entire NaN row (and silently NaN the Gage R&R variance components downstream).
+        if (dfA <= 0 || dfB <= 0)
+            throw new ArgumentException("Two-way ANOVA needs at least two levels of each factor.");
         double msA = ssA / dfA, msB = ssB / dfB, msAB = dfAB > 0 ? ssAB / dfAB : double.NaN;
         double msError = dfError > 0 ? ssError / dfError : double.NaN;
 
@@ -63,6 +67,12 @@ public static class AnovaExtensions
             FA, FB, FAB, pA, pB, pAB, Math.Sqrt(msError), ssTotal > 0 ? 1 - ssError / ssTotal : double.NaN);
     }
 
+    // InverseCDF runs 48 bisection steps over a doubly-nested Simpson quadrature (~1.8M
+    // normal evaluations). One-way ANOVA runs Tukey unconditionally, so memoize the
+    // critical value — it depends only on (conf, k, df) and the engine is long-lived.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(double Conf, int K, int Df), double>
+        QCriticalCache = new();
+
     /// <summary>Tukey HSD (Tukey-Kramer) all-pairwise comparisons for a one-way layout.</summary>
     public static TukeyResult Tukey(IReadOnlyList<(string Name, double[] Values)> groups, double conf = 0.95)
     {
@@ -70,7 +80,8 @@ public static class AnovaExtensions
         int k = anova.Groups.Count;
         double mse = anova.MsError;
         int dfError = anova.DfError;
-        double qCrit = StudentizedRange.InverseCDF(conf, k, dfError);
+        double qCrit = QCriticalCache.GetOrAdd((conf, k, dfError),
+            key => StudentizedRange.InverseCDF(key.Conf, key.K, key.Df));
 
         var comps = new List<TukeyComparison>();
         for (int i = 0; i < k; i++)

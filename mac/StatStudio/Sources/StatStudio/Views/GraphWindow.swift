@@ -7,8 +7,17 @@ import UniformTypeIdentifiers
 enum GraphWindows {
     fileprivate static var controllers: [GraphWindowController] = []
 
+    /// Every analysis opens fresh windows, and each retains a full-size NSImage plus the
+    /// raw PNG bytes. Retire the oldest rather than letting them accumulate unbounded.
+    private static let maxWindows = 24
+
     static func show(title: String, pngBase64: String) {
         guard let data = Data(base64Encoded: pngBase64), let image = NSImage(data: data) else { return }
+        while controllers.count >= maxWindows {
+            let oldest = controllers.removeFirst()
+            oldest.window?.delegate = nil      // windowWillClose would mutate the array again
+            oldest.close()
+        }
         let host = NSHostingController(rootView: GraphView(image: image, pngData: data, title: title))
         let window = NSWindow(contentViewController: host)
         window.title = title

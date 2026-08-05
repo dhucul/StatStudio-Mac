@@ -42,14 +42,25 @@ public static class VarianceTests
         int N = used.Sum(g => g.Values.Length);
         var stats = used.Select(g => (g.Name, g.Values.Length, Math.Sqrt(Variance(g.Values)))).ToList();
 
-        // Bartlett
-        double pooledVar = used.Sum(g => (g.Values.Length - 1) * Variance(g.Values)) / (N - k);
-        double sumLn = used.Sum(g => (g.Values.Length - 1) * Math.Log(Variance(g.Values)));
-        double bNum = (N - k) * Math.Log(pooledVar) - sumLn;
-        double c = 1 + (used.Sum(g => 1.0 / (g.Values.Length - 1)) - 1.0 / (N - k)) / (3.0 * (k - 1));
-        double bartlett = bNum / c;
+        // Bartlett. Undefined when a group has zero variance: log(0) drives the statistic
+        // to +infinity and would print a spurious, perfectly significant p = 0.000.
+        // Report it as missing and let Levene (which stays valid) carry the result.
         int bartlettDf = k - 1;
-        double bartlettP = 1 - new ChiSquared(bartlettDf).CumulativeDistribution(bartlett);
+        double bartlett, bartlettP;
+        if (used.Any(g => Variance(g.Values) <= 0))
+        {
+            bartlett = double.NaN;
+            bartlettP = double.NaN;
+        }
+        else
+        {
+            double pooledVar = used.Sum(g => (g.Values.Length - 1) * Variance(g.Values)) / (N - k);
+            double sumLn = used.Sum(g => (g.Values.Length - 1) * Math.Log(Variance(g.Values)));
+            double bNum = (N - k) * Math.Log(pooledVar) - sumLn;
+            double c = 1 + (used.Sum(g => 1.0 / (g.Values.Length - 1)) - 1.0 / (N - k)) / (3.0 * (k - 1));
+            bartlett = bNum / c;
+            bartlettP = 1 - new ChiSquared(bartlettDf).CumulativeDistribution(bartlett);
+        }
 
         // Levene (Brown-Forsythe): one-way ANOVA on |x − group median|
         var z = used.Select(g =>

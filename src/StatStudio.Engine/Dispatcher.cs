@@ -119,6 +119,13 @@ internal static class Dispatcher
         }
         catch (Exception ex)
         {
+            // Handlers fill `res` incrementally, so a mid-flight throw can leave half an
+            // analysis attached. Drop it — a failed op must not ship partial output.
+            res.StatusTitle = null;
+            res.SessionText = null;
+            res.Worksheet = null;
+            res.Graphs = null;
+            res.Samples = null;
             res.Ok = false;
             res.Error = ex.Message;
         }

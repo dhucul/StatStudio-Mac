@@ -43,6 +43,13 @@ public static class Logistic
             if (delta.AbsoluteMaximum() < 1e-10) { converged = true; iter++; break; }
         }
 
+        // A collinear design (or perfect separation) makes the inverse NaN-valued, and
+        // Math.Max(0, NaN) is NaN — so without this every coefficient, SE, z and p would
+        // silently render as "*". Report it the way Regression.Fit does.
+        if (beta.Any(b => double.IsNaN(b) || double.IsInfinity(b)))
+            throw new ArgumentException(
+                "Cannot fit the model — the predictors are collinear or perfectly separate the response.");
+
         var muFinal = (X * beta).Map(Sigmoid);
         double dev = -2 * Deviance(y, muFinal.ToArray());
         double pBar = y.Average();

@@ -111,6 +111,13 @@ struct WorksheetGridView: NSViewRepresentable {
             if isGutter {
                 field.stringValue = "\(row + 1)"
             } else if let j = Int(col.identifier.rawValue) {
+                // NSTableView caches its row count and only re-queries on reloadData(),
+                // which SwiftUI defers to a later update pass — so `row` can outrun a
+                // worksheet that was just replaced by a shorter one. Never trust it.
+                guard row >= 0, row < model.worksheet.rows.count else {
+                    field.stringValue = ""
+                    return field
+                }
                 let r = model.worksheet.rows[row]
                 field.stringValue = j < r.count ? r[j] : ""
             }
@@ -169,6 +176,10 @@ struct WorksheetGridView: NSViewRepresentable {
 
         func deleteRows(_ rows: IndexSet) {
             guard !rows.isEmpty else { return }
+            // Commit any active cell editor before mutating. controlTextDidEndEditing
+            // fires after the reload below, and would resolve its row against the
+            // rebuilt table — writing the stale text into whatever row shifted up.
+            _ = tableView?.window?.endEditing(for: nil)
             for r in rows.sorted(by: >) where r < model.worksheet.rows.count {
                 model.worksheet.rows.remove(at: r)
             }

@@ -30,7 +30,8 @@ public static class MixtureAnalysis
                 }
 
         int p = cols.Count;
-        if (n < p) throw new ArgumentException($"Need at least {p} runs for this mixture model.");
+        // Strict: n == p is saturated (df error 0), which silently NaNs every SE and p-value.
+        if (n <= p) throw new ArgumentException($"Need more than {p} runs for this mixture model.");
 
         var X = Matrix<double>.Build.Dense(n, p);
         for (int r = 0; r < n; r++) for (int c = 0; c < p; c++) X[r, c] = cols[c][r];

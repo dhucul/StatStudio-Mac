@@ -68,8 +68,11 @@ internal static class OpsData
         var result = Calculator.Evaluate(expr, ws);
         var col = ws.Find(target) ?? ws.AddColumn(target);
         col.Clear();
+        // Non-finite results (e.g. division by zero) must land as missing, not as the
+        // literal text "Infinity" — that string re-parses as numeric and would poison
+        // every downstream analysis reading the column.
         foreach (var v in result)
-            col.Add(double.IsNaN(v) ? null : v.ToString("0.##########", CultureInfo.InvariantCulture));
+            col.Add(double.IsFinite(v) ? v.ToString("0.##########", CultureInfo.InvariantCulture) : null);
         res.Worksheet = WorksheetBridge.ToDto(ws);
         res.StatusTitle = "Calculator";
         res.SessionText = Out.Raw($"Calculated '{target}' = {expr}  ({result.Length} rows).");
