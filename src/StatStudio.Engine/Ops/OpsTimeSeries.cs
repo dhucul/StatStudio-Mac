@@ -12,7 +12,7 @@ internal static class OpsTimeSeries
     {
         var ws = Ws(req);
         var name = StrReq(req, "column");
-        return (Require(ws, name).NumericValues(), name);
+        return (Require(ws, name).OrderedNumericValues(), name);
     }
 
     public static void Trend(EngineRequest req, EngineResponse res)

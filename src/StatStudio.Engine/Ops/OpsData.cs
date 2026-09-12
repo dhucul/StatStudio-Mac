@@ -10,9 +10,10 @@ internal static class OpsData
     public static void Import(EngineRequest req, EngineResponse res)
     {
         var path = StrReq(req, "path");
+        bool hasHeader = Bool(req, "hasHeader", true);
         var ws = path.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
-            ? WorksheetIo.ReadXlsx(path)
-            : WorksheetIo.ReadCsv(path);
+            ? WorksheetIo.ReadXlsx(path, hasHeader)
+            : WorksheetIo.ReadCsv(path, hasHeader);
         res.Worksheet = WorksheetBridge.ToDto(ws);
         res.StatusTitle = "Imported";
         res.SessionText = Out.Raw($"Opened '{Path.GetFileName(path)}' — {ws.ColumnCount} columns, {ws.RowCount} rows.");
@@ -68,11 +69,12 @@ internal static class OpsData
         var result = Calculator.Evaluate(expr, ws);
         var col = ws.Find(target) ?? ws.AddColumn(target);
         col.Clear();
+        col.Type = ColumnType.Numeric;
         // Non-finite results (e.g. division by zero) must land as missing, not as the
         // literal text "Infinity" — that string re-parses as numeric and would poison
         // every downstream analysis reading the column.
         foreach (var v in result)
-            col.Add(double.IsFinite(v) ? v.ToString("0.##########", CultureInfo.InvariantCulture) : null);
+            col.Add(double.IsFinite(v) ? v.ToString("G17", CultureInfo.InvariantCulture) : null);
         res.Worksheet = WorksheetBridge.ToDto(ws);
         res.StatusTitle = "Calculator";
         res.SessionText = Out.Raw($"Calculated '{target}' = {expr}  ({result.Length} rows).");

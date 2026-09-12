@@ -91,6 +91,13 @@ internal static class Plots
                 FillColor = Palette[i % Palette.Length].WithAlpha(0.6),
                 LineColor = Fg,
             });
+            var outliers = sorted.Where(v => v < lo || v > hi).ToArray();
+            if (outliers.Length > 0)
+            {
+                var points = p.Add.ScatterPoints(Enumerable.Repeat((double)i, outliers.Length).ToArray(), outliers);
+                points.Color = Fg;
+                points.MarkerSize = 6;
+            }
             ticks.Add(new Tick(i, series[i].Name));
         }
 

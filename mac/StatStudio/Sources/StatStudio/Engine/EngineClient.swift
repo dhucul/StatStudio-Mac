@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 enum EngineError: Error, CustomStringConvertible {
     case notFound
@@ -44,7 +45,7 @@ private final class ReadCompletion: @unchecked Sendable {
 }
 
 /// Owns the bundled .NET helper process and speaks newline-delimited JSON to it.
-/// Requests are serialized through the actor, so responses are read back in order.
+/// A transaction gate remains held across suspension, keeping each response with its request.
 actor EngineClient {
     private var process: Process?
     private var inWrite: FileHandle?
@@ -52,9 +53,29 @@ actor EngineClient {
     private var buffer = Data()
     private var counter = 0
     private let responseTimeout: TimeInterval
+    private let executableURL: URL?
+    private var transactionActive = false
+    private var transactionWaiters: [CheckedContinuation<Void, Never>] = []
 
-    init(responseTimeout: TimeInterval = 30) {
+    init(responseTimeout: TimeInterval = 30, executableURL: URL? = nil) {
         self.responseTimeout = responseTimeout
+        self.executableURL = executableURL
+    }
+
+    private func acquireTransaction() async {
+        if !transactionActive { transactionActive = true; return }
+        await withCheckedContinuation { transactionWaiters.append($0) }
+    }
+
+    private func releaseTransaction() {
+        if transactionWaiters.isEmpty { transactionActive = false }
+        else { transactionWaiters.removeFirst().resume() }
+    }
+
+    func shutdown() async {
+        await acquireTransaction()
+        defer { releaseTransaction() }
+        resetConnection()
     }
 
     /// Resolve the helper: explicit native exe, dev DLL via dotnet, or the app bundle.
@@ -64,7 +85,10 @@ actor EngineClient {
         let p = Process()
         let env = ProcessInfo.processInfo.environment
 
-        if let exe = env["STATSTUDIO_ENGINE"] {
+        if let executableURL {
+            p.executableURL = executableURL
+            p.arguments = []
+        } else if let exe = env["STATSTUDIO_ENGINE"] {
             p.executableURL = URL(fileURLWithPath: exe)
             p.arguments = []
         } else if let dll = env["STATSTUDIO_ENGINE_DLL"] {
@@ -79,6 +103,9 @@ actor EngineClient {
         }
 
         let inPipe = Pipe(), outPipe = Pipe()
+        guard fcntl(inPipe.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1) != -1 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
         p.standardInput = inPipe
         p.standardOutput = outPipe
         // stderr inherited so engine crash traces surface in the console.
@@ -91,6 +118,9 @@ actor EngineClient {
 
     func send(op: String, worksheet: WorksheetDTO? = nil,
               params: [String: JSONValue] = [:]) async throws -> EngineResponse {
+        await acquireTransaction()
+        defer { releaseTransaction() }
+        try Task.checkCancellation()
         counter += 1
         let req = EngineRequest(id: counter, op: op, worksheet: worksheet,
                                 params: params.isEmpty ? nil : params)
@@ -101,8 +131,9 @@ actor EngineClient {
             do {
                 try startIfNeeded()
                 guard let writer = inWrite else { throw EngineError.disconnected }
-                try writer.write(contentsOf: data)
-                let line = try await readLine()
+                let deadline = Date().addingTimeInterval(responseTimeout)
+                try await writeRequest(data, to: writer, deadline: deadline)
+                let line = try await readLine(deadline: deadline)
                 let response = try JSONDecoder().decode(EngineResponse.self, from: line)
                 guard response.id == req.id else {
                     throw EngineError.responseMismatch(expected: req.id, actual: response.id)
@@ -117,10 +148,22 @@ actor EngineClient {
         throw EngineError.disconnected
     }
 
-    private func readLine() async throws -> Data {
+    private func writeRequest(_ data: Data, to writer: FileHandle, deadline: Date) async throws {
+        let _: Data = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+            let completion = ReadCompletion(continuation)
+            DispatchQueue.global(qos: .userInitiated).async {
+                do { try writer.write(contentsOf: data); completion.resume(returning: Data()) }
+                catch { completion.resume(throwing: error) }
+            }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + max(0, deadline.timeIntervalSinceNow)) {
+                completion.resume(throwing: EngineError.timeout)
+            }
+        }
+    }
+
+    private func readLine(deadline: Date) async throws -> Data {
         // One deadline for the whole response. Re-arming the timeout per chunk lets an
         // engine that dribbles a byte at a time hold the connection open forever.
-        let deadline = Date().addingTimeInterval(responseTimeout)
         while true {
             if let nl = buffer.firstIndex(of: 0x0a) {
                 let line = buffer.subdata(in: buffer.startIndex..<nl)
@@ -156,8 +199,8 @@ actor EngineClient {
         // Detach first: a handler firing against a closed handle raises an Objective-C
         // exception, which Swift cannot catch and which would take the app down.
         outRead?.readabilityHandler = nil
-        // Closing stdin makes the engine's ReadLine loop see EOF and exit on its own.
-        try? inWrite?.close()
+        // The worker owns the handle until its write finishes; never close/reuse
+        // its descriptor while that write may still be in progress.
         if process?.isRunning == true { process?.terminate() }
         process = nil
         inWrite = nil

@@ -83,7 +83,7 @@ public static class RegressionExtensions
         if (inModel.Count == 0)
         {
             steps.Add("No predictor met the entry criterion.");
-            inModel.Add(EnumerableArgMin(y, predictors, names));
+            // An empty predictor list fits the intercept-only model.
         }
 
         var finalIdx = inModel.ToArray();
@@ -91,19 +91,4 @@ public static class RegressionExtensions
         return new StepwiseResult(final, steps);
     }
 
-    private static int EnumerableArgMin(double[] y, double[][] predictors, IReadOnlyList<string> names)
-    {
-        // fallback: the single predictor with the best (lowest) p-value
-        int best = 0; double bestP = double.PositiveInfinity;
-        for (int i = 0; i < predictors.Length; i++)
-        {
-            try
-            {
-                var r = Regression.Fit(y, new[] { predictors[i] }, new[] { names[i] });
-                if (r.Terms[1].P < bestP) { bestP = r.Terms[1].P; best = i; }
-            }
-            catch (ArgumentException) { }
-        }
-        return best;
-    }
 }

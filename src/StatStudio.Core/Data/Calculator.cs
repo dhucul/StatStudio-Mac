@@ -63,7 +63,33 @@ public static class Calculator
         // deeply-nested expression would take the whole engine process down with it.
         private const int MaxDepth = 200;
 
-        public Parser(string s, Worksheet ws) { _s = s; _ws = ws; _n = ws.RowCount; }
+        public Parser(string s, Worksheet ws)
+        {
+            ValidateComplexity(s);
+            _s = s; _ws = ws; _n = ws.RowCount;
+        }
+
+        private static void ValidateComplexity(string expression)
+        {
+            const int MaxTokens = 256;
+            if (expression.Length > 16_384) throw new FormatException("Expression is too long.");
+            int tokens = 0;
+            for (int i = 0; i < expression.Length; i++)
+            {
+                char c = expression[i];
+                if (char.IsWhiteSpace(c)) continue;
+                if (++tokens > MaxTokens) throw new FormatException("Expression is too complex (maximum 256 tokens).");
+                if (c == '\'')
+                {
+                    while (++i < expression.Length && expression[i] != '\'') { }
+                }
+                else if (char.IsLetterOrDigit(c) || c == '.')
+                {
+                    while (i + 1 < expression.Length &&
+                           (char.IsLetterOrDigit(expression[i + 1]) || expression[i + 1] is '.' or '_')) i++;
+                }
+            }
+        }
 
         public Func<int, double> Parse()
         {

@@ -29,17 +29,35 @@ public static class Reliability
     public static DistributionFit FitWeibull(double[] t)
     {
         int n = t.Length;
-        double meanLn = t.Average(x => Math.Log(x));
-        double Shape(double b)
+        if (n < 2 || t.Any(x => !double.IsFinite(x) || x <= 0))
+            throw new ArgumentException("Weibull fitting needs at least two finite positive times.");
+        double maxTime = t.Max();
+        var logs = t.Select(x => Math.Log(x) - Math.Log(maxTime)).ToArray();
+        if (t.Min() == maxTime)
+            throw new ArgumentException("A finite Weibull shape cannot be estimated from constant times.");
+        double meanLog = logs.Average();
+        double Shape(double shape)
         {
-            double sw = 0, swl = 0;
-            foreach (var x in t) { double w = Math.Pow(x, b); sw += w; swl += w * Math.Log(x); }
-            return swl / sw - 1.0 / b - meanLn;
+            double weights = 0, weightedLog = 0;
+            foreach (double x in logs)
+            {
+                double weight = Math.Exp(shape * x); // x <= 0; largest weight is 1
+                weights += weight;
+                weightedLog += weight * x;
+            }
+            return weightedLog / weights - meanLog - 1 / shape;
         }
-        double lo = 1e-3, hi = 100;
-        for (int i = 0; i < 100; i++) { double mid = 0.5 * (lo + hi); if (Shape(mid) < 0) lo = mid; else hi = mid; }
-        double beta = 0.5 * (lo + hi);
-        double eta = Math.Pow(t.Sum(x => Math.Pow(x, beta)) / n, 1.0 / beta);
+        double lo = 0, hi = 1;
+        while (Shape(hi) < 0 && hi < 1e16) hi *= 2;
+        if (!double.IsFinite(Shape(hi)) || Shape(hi) < 0)
+            throw new ArgumentException("Could not bracket a finite Weibull shape estimate.");
+        for (int i = 0; i < 100; i++)
+        {
+            double mid = (lo + hi) / 2;
+            if (Shape(mid) < 0) lo = mid; else hi = mid;
+        }
+        double beta = (lo + hi) / 2;
+        double eta = maxTime * Math.Exp(Math.Log(logs.Average(x => Math.Exp(beta * x))) / beta);
 
         double mean = eta * SpecialFunctions.Gamma(1 + 1.0 / beta);
         double var = eta * eta * (SpecialFunctions.Gamma(1 + 2.0 / beta) - Math.Pow(SpecialFunctions.Gamma(1 + 1.0 / beta), 2));

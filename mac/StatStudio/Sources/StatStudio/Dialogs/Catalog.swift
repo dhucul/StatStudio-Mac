@@ -73,7 +73,7 @@ enum Specs {
         fields: [.col("y", "Response (Y):"), .col("x", "Predictor (X):"), .int("degree", "Degree:", 2)])
     static let bestSubsets = AnalysisSpec("Best Subsets", op: "reg.bestsubsets",
         fields: [.col("response", "Response:"), .cols("predictors", "Candidate predictors:", min: 1)])
-    static let stepwise = AnalysisSpec("Stepwise", op: "reg.stepwise",
+    static let stepwise = AnalysisSpec("Forward Selection", op: "reg.stepwise",
         fields: [.col("response", "Response:"), .cols("predictors", "Candidate predictors:", min: 1)])
     static let logistic = AnalysisSpec("Binary Logistic Regression", op: "reg.logistic",
         fields: [.col("response", "Response (0/1):"), .cols("predictors", "Predictors:", min: 1)])
@@ -82,7 +82,7 @@ enum Specs {
 
     static let trend = AnalysisSpec("Trend Analysis", op: "ts.trend",
         fields: [.col("column", "Series:"), .flag("quadratic", "Quadratic trend", false), .int("forecasts", "Forecasts:", 0)])
-    static let movingAvg = AnalysisSpec("Moving Average", op: "ts.movavg",
+    static let movingAvg = AnalysisSpec("Moving Average (Trailing)", op: "ts.movavg",
         fields: [.col("column", "Series:"), .int("length", "MA length:", 3), .int("forecasts", "Forecasts:", 0)])
     static let singleExp = AnalysisSpec("Single Exp Smoothing", op: "ts.singleexp",
         fields: [.col("column", "Series:"), .num("alpha", "Alpha:", 0.2), .int("forecasts", "Forecasts:", 0)])

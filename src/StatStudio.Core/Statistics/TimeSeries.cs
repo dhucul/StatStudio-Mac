@@ -91,12 +91,11 @@ public static class TimeSeries
         if (forecasts < 0) throw new ArgumentException("Forecast count must be non-negative.");
         var fitted = new double[n];
         Array.Fill(fitted, double.NaN);
-        bool center = length % 2 == 1;
-        int half = length / 2;
+        // Trailing smoothing includes the current point and never future data.
         for (int i = 0; i < n; i++)
         {
-            int lo = center ? i - half : i - length + 1;
-            int hi = center ? i + half : i;
+            int lo = i - length + 1;
+            int hi = i;
             if (lo < 0 || hi >= n) continue;
             double sum = 0;
             for (int j = lo; j <= hi; j++) sum += y[j];
@@ -104,7 +103,7 @@ public static class TimeSeries
         }
         double last = y.Skip(Math.Max(0, n - length)).Average();
         var fc = Enumerable.Repeat(last, forecasts).ToArray();
-        return new SmoothingResult("Moving Average", new[] { ("Length", (double)length) },
+        return new SmoothingResult("Moving Average (trailing)", new[] { ("Length", (double)length) },
             fitted, fc, Accuracy(y, fitted));
     }
 

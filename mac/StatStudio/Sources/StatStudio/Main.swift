@@ -102,14 +102,14 @@ private enum SelfTest {
                 params: ["events1": .int(1), "trials1": .int(0), "p0": .double(0.5)])
             return !r.ok && (r.error?.contains("trials1") ?? false)
         }
-        await check("P chart retains worksheet row alignment") {
+        await check("P chart rejects missing subgroup positions") {
             let source = WorksheetDTO(name: "SPC", columns: [
                 ColumnDTO(name: "Counts", cells: ["1", nil, "9"]),
                 ColumnDTO(name: "Sizes", cells: ["10", "100", "10"]),
             ])
             let r = try await engine.send(op: "spc.p", worksheet: source,
                 params: ["counts": .string("Counts"), "sizes": .string("Sizes")])
-            return r.ok && (r.sessionText?.contains("0.5000") ?? false)
+            return !r.ok && (r.error?.contains("Row 2") ?? false)
         }
         await check("graph.histogram returns a valid PNG") {
             let r = try await engine.send(op: "graph.histogram", worksheet: demo,

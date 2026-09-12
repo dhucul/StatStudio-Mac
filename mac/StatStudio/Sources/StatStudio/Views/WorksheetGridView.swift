@@ -69,6 +69,7 @@ struct WorksheetGridView: NSViewRepresentable {
         let model: AppModel
         weak var tableView: NSTableView?
         var lastGeneration = -1
+        private var editingCells: [ObjectIdentifier: (row: Int, col: Int, generation: Int)] = [:]
 
         private let rowColID = NSUserInterfaceItemIdentifier("__row__")
 
@@ -147,18 +148,31 @@ struct WorksheetGridView: NSViewRepresentable {
 
         // ---- editing ----
 
+        func controlTextDidBeginEditing(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField, let tv = tableView,
+                  let raw = field.identifier?.rawValue, let col = Int(raw) else { return }
+            beginCellEdit(field, row: tv.row(for: field), col: col)
+        }
+
+        func beginCellEdit(_ field: NSTextField, row: Int, col: Int) {
+            editingCells = editingCells.filter { $0.value.generation == model.gridGeneration }
+            editingCells[ObjectIdentifier(field)] = (row, col, model.gridGeneration)
+        }
+
         func controlTextDidEndEditing(_ obj: Notification) {
-            guard let field = obj.object as? NSTextField,
-                  let tv = tableView,
-                  let idRaw = field.identifier?.rawValue,
-                  let j = Int(idRaw) else { return }
-            let row = tv.row(for: field)
-            guard row >= 0 else { return }
-            commit(row: row, col: j, value: field.stringValue)
+            guard let field = obj.object as? NSTextField else { return }
+            finishCellEdit(field)
+        }
+
+        func finishCellEdit(_ field: NSTextField) {
+            guard let edit = editingCells.removeValue(forKey: ObjectIdentifier(field)),
+                  edit.generation == model.gridGeneration else { return }
+            commit(row: edit.row, col: edit.col, value: field.stringValue)
         }
 
         private func commit(row: Int, col j: Int, value: String) {
-            guard row < model.worksheet.rows.count else { return }
+            guard row >= 0, row < model.worksheet.rows.count,
+                  j >= 0, j < model.worksheet.columnNames.count else { return }
             if j >= model.worksheet.rows[row].count {
                 let pad = j + 1 - model.worksheet.rows[row].count
                 model.worksheet.rows[row].append(contentsOf: Array(repeating: "", count: pad))

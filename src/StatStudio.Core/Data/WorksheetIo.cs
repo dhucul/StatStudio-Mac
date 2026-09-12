@@ -35,8 +35,11 @@ public static class WorksheetIo
 
     public static void WriteCsv(Worksheet ws, string path, char delim = ',')
     {
-        using var writer = new StreamWriter(path, false, new UTF8Encoding(false));
-        WriteCsv(ws, writer, delim);
+        AtomicFile.Write(path, temp =>
+        {
+            using var writer = new StreamWriter(temp, false, new UTF8Encoding(false));
+            WriteCsv(ws, writer, delim);
+        });
     }
 
     public static void WriteCsv(Worksheet ws, TextWriter writer, char delim = ',')
@@ -92,7 +95,7 @@ public static class WorksheetIo
             }
         sheet.Row(1).Style.Font.Bold = true;
         sheet.Columns().AdjustToContents();
-        wb.SaveAs(path);
+        AtomicFile.Write(path, temp => wb.SaveAs(temp));
     }
 
     private static string SafeSheetName(string name)
@@ -132,7 +135,7 @@ public static class WorksheetIo
     /// </summary>
     private static bool LooksLikeHeader(List<List<string>> rows)
     {
-        if (rows.Count < 2) return false;
+        if (rows.Count == 0) return false;
         int cols = rows.Max(r => r.Count);
 
         // (a) strong signal: a text heading above a numeric column.

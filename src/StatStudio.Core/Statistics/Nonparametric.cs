@@ -28,10 +28,10 @@ public static class Nonparametric
         double w1 = 0;
         for (int i = 0; i < n1; i++) w1 += ranks[i];
 
-        double u1 = w1 - n1 * (n1 + 1) / 2.0;
+        double u1 = w1 - (double)n1 * (n1 + 1) / 2.0;
         double u = Math.Min(u1, (double)n1 * n2 - u1);
 
-        double muU = n1 * n2 / 2.0;
+        double muU = (double)n1 * n2 / 2.0;
         double tie = Ranking.TieCorrection(all);
         double varU = ((double)n1 * n2 / 12.0) * ((n + 1) - tie / ((double)n * (n - 1)));
         double sd = Math.Sqrt(varU);
@@ -55,9 +55,9 @@ public static class Nonparametric
             else wMinus += absRanks[i];
         }
 
-        double mu = n * (n + 1) / 4.0;
+        double mu = (double)n * (n + 1) / 4.0;
         double tie = Ranking.TieCorrection(diffs.Select(Math.Abs).ToArray());
-        double varW = n * (n + 1) * (2.0 * n + 1) / 24.0 - tie / 48.0;
+        double varW = (double)n * (n + 1) * (2.0 * n + 1) / 24.0 - tie / 48.0;
         double sd = Math.Sqrt(varW);
         double z = sd > 0 ? (wPlus - mu) / sd : double.NaN;
         double p = PFromZ(z, alt);
@@ -87,7 +87,7 @@ public static class Nonparametric
             h += rsum * rsum / gn;
             groupStats.Add((g.Name, gn, rsum / gn));
         }
-        h = 12.0 / (n * (n + 1)) * h - 3.0 * (n + 1);
+        h = 12.0 / ((double)n * (n + 1)) * h - 3.0 * (n + 1);
 
         double tie = Ranking.TieCorrection(all);
         double c = 1 - tie / ((double)n * n * n - n);

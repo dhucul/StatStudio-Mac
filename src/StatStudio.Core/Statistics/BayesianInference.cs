@@ -21,6 +21,9 @@ public sealed record BayesRegressionResult(
 /// <summary>Closed-form (conjugate / reference-prior) Bayesian inference.</summary>
 public static class Bayes
 {
+    private static double PosteriorSd(double scale, double df) =>
+        df > 2 ? scale * Math.Sqrt(df / (df - 2)) : double.NaN;
+
     /// <summary>Beta-Binomial: prior Beta(a,b) + x successes in n → posterior Beta(a+x, b+n−x).</summary>
     public static BayesProportionResult Proportion(int x, int n, double priorA = 1, double priorB = 1,
         double conf = 0.95, double threshold = 0.5)
@@ -65,7 +68,7 @@ public static class Bayes
         var t = new StudentT(0, 1, df);
         double tc = t.InverseCumulativeDistribution(1 - (1 - conf) / 2);
         double pgt = scale > 0 ? 1 - t.CumulativeDistribution((threshold - xbar) / scale) : double.NaN;
-        return new BayesNormalMeanResult("Normal mean (Jeffreys prior)", xbar, scale, df,
+        return new BayesNormalMeanResult("Normal mean (Jeffreys prior)", xbar, PosteriorSd(scale, df), df,
             xbar - tc * scale, xbar + tc * scale, conf, pgt, threshold);
     }
 
@@ -82,7 +85,7 @@ public static class Bayes
         {
             double se = term.SeCoef;
             double probPos = se > 0 ? t.CumulativeDistribution(term.Coef / se) : double.NaN;
-            terms.Add(new BayesRegressionTerm(term.Name, term.Coef, se,
+            terms.Add(new BayesRegressionTerm(term.Name, term.Coef, PosteriorSd(se, reg.DfError),
                 term.Coef - tc * se, term.Coef + tc * se, probPos));
         }
         return new BayesRegressionResult(response, predictorNames, terms, reg.S, reg.DfError, conf);

@@ -35,7 +35,10 @@ internal static class WorksheetBridge
                 var v = r < c.Cells.Count ? c.Cells[r] : null;
                 col.Add(string.IsNullOrEmpty(v) ? null : v);
             }
-            col.Type = col.LooksNumeric() ? ColumnType.Numeric : ColumnType.Text;
+            if (c.Type is null) col.Type = col.LooksNumeric() ? ColumnType.Numeric : ColumnType.Text;
+            else if (Enum.TryParse<ColumnType>(c.Type, ignoreCase: true, out var declared) && Enum.IsDefined(declared))
+                col.Type = declared;
+            else throw new ArgumentException($"Unknown column type '{c.Type}'.");
         }
         return ws;
     }
@@ -46,6 +49,7 @@ internal static class WorksheetBridge
         Columns = ws.Columns.Select(c => new ColumnDto
         {
             Name = c.Name,
+            Type = c.Type.ToString(),
             Cells = c.Cells.ToList(),
         }).ToList(),
     };

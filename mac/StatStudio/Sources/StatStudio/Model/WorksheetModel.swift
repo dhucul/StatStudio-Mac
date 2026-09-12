@@ -6,6 +6,7 @@ struct WorksheetModel {
     var name: String
     var columnNames: [String]
     var rows: [[String]]
+    var columnTypes: [String?] = []
 
     static func empty(cols: Int = 8, rows: Int = 20) -> WorksheetModel {
         let columnCount = max(cols, 1)
@@ -26,7 +27,7 @@ struct WorksheetModel {
                 let v = j < r.count ? r[j] : ""
                 cells.append(v.isEmpty ? nil : v)
             }
-            cols.append(ColumnDTO(name: n, cells: cells))
+            cols.append(ColumnDTO(name: n, cells: cells, type: j < columnTypes.count ? columnTypes[j] : nil))
         }
         return WorksheetDTO(name: name, columns: cols)
     }
@@ -43,17 +44,18 @@ struct WorksheetModel {
         let blank = Array(repeating: "", count: max(names.count, 1))
         for _ in 0..<padRows { rows.append(blank) }
         return WorksheetModel(name: dto.name ?? "Worksheet 1",
-                              columnNames: names.isEmpty ? ["C1"] : names, rows: rows)
+                              columnNames: names.isEmpty ? ["C1"] : names, rows: rows,
+                              columnTypes: dto.columns.map { $0.type })
     }
 
     /// Cheap numeric-vs-text sniff for the Navigator (mirrors the engine's intent).
     func looksNumeric(column j: Int) -> Bool {
         var seen = false
         for r in rows where j < r.count {
-            let v = r[j].trimmingCharacters(in: .whitespaces)
+            let v = r[j].trimmingCharacters(in: .whitespacesAndNewlines)
             if v.isEmpty || v == "*" { continue }
             seen = true
-            if Double(v) == nil { return false }
+            if NumericCell.parse(v) == nil { return false }
         }
         return seen
     }
@@ -61,7 +63,7 @@ struct WorksheetModel {
     func nonMissingCount(column j: Int) -> Int {
         rows.reduce(0) { acc, r in
             guard j < r.count else { return acc }
-            let v = r[j].trimmingCharacters(in: .whitespaces)
+            let v = r[j].trimmingCharacters(in: .whitespacesAndNewlines)
             return (v.isEmpty || v == "*") ? acc : acc + 1
         }
     }

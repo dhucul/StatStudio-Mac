@@ -100,5 +100,24 @@ public sealed class DataColumn
         double.TryParse(s, NumberStyles.Float | NumberStyles.AllowThousands,
             CultureInfo.InvariantCulture, out value);
 
-    private static string? Clean(string? raw) => raw?.Trim();
+    private static string? Clean(string? raw)
+    {
+        var text = raw?.Trim();
+        if (double.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands,
+            CultureInfo.InvariantCulture, out var value) && !double.IsFinite(value))
+            throw new FormatException($"Non-finite numeric cell '{text}'. Use * for missing data.");
+        return text;
+    }
+
+    /// <summary>Keep time positions intact; ignore only unused trailing cells.</summary>
+    public double[] OrderedNumericValues()
+    {
+        int end = Count - 1;
+        while (end >= 0 && IsMissing(end)) end--;
+        var values = new double[end + 1];
+        for (int r = 0; r <= end; r++)
+            if (IsMissing(r) || !TryParse(this[r], out values[r]) || !double.IsFinite(values[r]))
+                throw new ArgumentException($"Column '{Name}', row {r + 1}: ordered analyses require contiguous finite observations; fill the gap before running.");
+        return values;
+    }
 }

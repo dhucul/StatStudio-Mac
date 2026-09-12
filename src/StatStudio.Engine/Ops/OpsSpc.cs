@@ -18,14 +18,14 @@ internal static class OpsSpc
     }
 
     private static int[] IntColumn(Worksheet ws, string name) =>
-        Require(ws, name).NumericValues().Select(v => CheckedCount(v, name)).ToArray();
+        Require(ws, name).OrderedNumericValues().Select(v => CheckedCount(v, name)).ToArray();
 
     public static void VariablesChart(EngineRequest req, EngineResponse res, bool useRange)
     {
         var ws = Ws(req);
         var cols = Strings(req, "columns").Select(n => Require(ws, n)).ToList();
         if (cols.Count < 2) throw new ArgumentException("Need at least 2 subgroup columns.");
-        var subgroups = Columns.Rows(cols);
+        var subgroups = Columns.Rows(cols, requireContiguous: true);
         var (mean, spread) = useRange ? ControlCharts.XbarR(subgroups) : ControlCharts.XbarS(subgroups);
         string kind = useRange ? "Xbar-R" : "Xbar-S";
         res.StatusTitle = $"{kind} Chart";
@@ -37,7 +37,7 @@ internal static class OpsSpc
     public static void Imr(EngineRequest req, EngineResponse res)
     {
         var ws = Ws(req);
-        var v = Require(ws, StrReq(req, "column")).NumericValues();
+        var v = Require(ws, StrReq(req, "column")).OrderedNumericValues();
         if (v.Length < 2) throw new ArgumentException("Need at least 2 values.");
         var (ind, mr) = ControlCharts.IMR(v);
         res.StatusTitle = "I-MR Chart";
@@ -54,7 +54,7 @@ internal static class OpsSpc
         if (kind == "P" || kind == "U")
         {
             string sizesName = StrReq(req, "sizes");
-            var rows = Columns.Rows(new[] { Require(ws, countsName), Require(ws, sizesName) });
+            var rows = Columns.Rows(new[] { Require(ws, countsName), Require(ws, sizesName) }, requireContiguous: true);
             if (rows.Count < 2) throw new ArgumentException("Need at least 2 complete rows.");
             var counts = rows.Select(r => CheckedCount(r[0], countsName)).ToArray();
             var sizes = rows.Select(r => CheckedCount(r[1], sizesName)).ToArray();
@@ -89,7 +89,7 @@ internal static class OpsSpc
     {
         var ws = Ws(req);
         var col = StrReq(req, "column");
-        var v = Require(ws, col).NumericValues();
+        var v = Require(ws, col).OrderedNumericValues();
         if (v.Length < 2) throw new ArgumentException("Need at least 2 values.");
         double? lsl = NumOpt(req, "lsl"), usl = NumOpt(req, "usl"), target = NumOpt(req, "target");
         if (lsl.HasValue && usl.HasValue && lsl.Value >= usl.Value)

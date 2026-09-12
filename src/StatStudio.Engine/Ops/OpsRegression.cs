@@ -59,7 +59,7 @@ internal static class OpsRegression
     {
         var ws = Ws(req);
         var (y, x, names) = Design(req, ws);
-        res.StatusTitle = "Stepwise Regression";
+        res.StatusTitle = "Forward Selection Regression";
         res.SessionText = Out.Raw(AdvancedFormatters.Stepwise(RegressionExtensions.Stepwise(y, x, names.ToList())));
     }
 

@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\StatStudio.Core\StatStudio.Core.csproj" />
+    <ProjectReference Include="..\..\src\StatStudio.Engine\StatStudio.Engine.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

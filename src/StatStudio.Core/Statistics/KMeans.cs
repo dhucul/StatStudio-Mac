@@ -2,7 +2,7 @@ namespace StatStudio.Core.Statistics;
 
 public sealed record KMeansResult(
     int K, IReadOnlyList<string> Variables, int[] Assignments, double[][] Centroids,
-    int[] Sizes, double[] WithinSS, double TotalWithinSS, int Iterations);
+    int[] Sizes, double[] WithinSS, double TotalWithinSS, int Iterations, bool Converged);
 
 public static class KMeans
 {
@@ -23,6 +23,7 @@ public static class KMeans
         var centroids = SeedPlusPlus(data, k, p, rnd);
         var assign = Enumerable.Repeat(-1, n).ToArray();
         int iter = 0;
+        bool converged = false;
 
         for (; iter < maxIter; iter++)
         {
@@ -63,13 +64,13 @@ public static class KMeans
             for (int c = 0; c < k; c++)
                 for (int j = 0; j < p; j++) centroids[c][j] = sum[c][j] / cnt[c];
 
-            if (!changed) { iter++; break; }
+            if (!changed) { converged = true; iter++; break; }
         }
 
         var within = new double[k];
         var sizes = new int[k];
         for (int i = 0; i < n; i++) { within[assign[i]] += Dist2(data[i], centroids[assign[i]]); sizes[assign[i]]++; }
-        return new KMeansResult(k, names, assign, centroids, sizes, within, within.Sum(), iter);
+        return new KMeansResult(k, names, assign, centroids, sizes, within, within.Sum(), iter, converged);
     }
 
     private static double[][] SeedPlusPlus(double[][] data, int k, int p, Random rnd)

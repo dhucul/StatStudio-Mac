@@ -27,9 +27,11 @@ public static class Columns
     /// Each row across the given columns as a subgroup (rows where every column holds
     /// a number). Used by the variables control charts (Xbar-R / Xbar-S).
     /// </summary>
-    public static List<double[]> Rows(IReadOnlyList<DataColumn> cols)
+    public static List<double[]> Rows(IReadOnlyList<DataColumn> cols, bool requireContiguous = false)
     {
         int n = cols.Count == 0 ? 0 : cols.Max(c => c.Count);
+        if (requireContiguous)
+            while (n > 0 && cols.All(c => c.IsMissing(n - 1))) n--;
         var result = new List<double[]>(n);
         for (int r = 0; r < n; r++)
         {
@@ -38,6 +40,8 @@ public static class Columns
             for (int j = 0; j < cols.Count; j++)
                 if (cols[j].IsMissing(r) || !DataColumn.TryParse(cols[j][r], out row[j])) { ok = false; break; }
             if (ok) result.Add(row);
+            else if (requireContiguous)
+                throw new ArgumentException($"Row {r + 1}: control charts require complete consecutive subgroups; fill the gap before running.");
         }
         return result;
     }

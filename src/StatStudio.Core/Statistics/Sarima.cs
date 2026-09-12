@@ -34,7 +34,12 @@ public static class Sarima
 
         int nc = includeConstant ? 1 : 0;
         int nParams = nc + p + sp + q + sq;
-        int maxArLag = p + sp * s;
+        long arLag = (long)p + (long)sp * s;
+        if (arLag >= m) throw new ArgumentException("Series too short for the specified seasonal AR lag.");
+        int maxArLag = (int)arLag;
+        long maxMaLag = (long)q + (long)sq * s;
+        if (maxMaLag >= m || m - (long)maxArLag <= nParams)
+            throw new ArgumentException("Series too short to estimate the specified SARIMA lags and parameters.");
         if (m <= maxArLag + 2) throw new ArgumentException("Series too short for the specified SARIMA order.");
 
         double[] theta;
@@ -171,7 +176,7 @@ public static class Sarima
         {
             double pred = cc;
             for (int k = 1; k <= a.Length; k++) pred += a[k - 1] * wExt[t - k];
-            for (int k = 1; k <= mm.Length; k++) pred += mm[k - 1] * (t - k < m ? eExt[t - k] : 0);
+            for (int k = 1; k <= mm.Length; k++) pred += mm[k - 1] * (t - k >= maxArLag && t - k < m ? eExt[t - k] : 0);
             wExt[t] = pred; eExt[t] = 0;
         }
         var fc = new double[h];

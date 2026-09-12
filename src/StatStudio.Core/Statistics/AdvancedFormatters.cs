@@ -75,7 +75,7 @@ public static class AdvancedFormatters
     public static string Stepwise(StepwiseResult r)
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append("Stepwise Regression\n\n");
+        sb.Append("Forward Selection Regression\n\n");
         foreach (var s in r.Steps) sb.Append("  ").Append(s).Append('\n');
         sb.Append('\n').Append(RegressionFormatter.Format(r.Final));
         return sb.ToString();

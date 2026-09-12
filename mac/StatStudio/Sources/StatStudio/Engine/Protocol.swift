@@ -5,6 +5,7 @@ import Foundation
 struct ColumnDTO: Codable, Sendable {
     var name: String
     var cells: [String?]
+    var type: String? = nil
 }
 
 struct WorksheetDTO: Codable, Sendable {

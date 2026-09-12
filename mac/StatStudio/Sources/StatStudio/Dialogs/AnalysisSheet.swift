@@ -154,7 +154,7 @@ struct AnalysisSheet: View {
                 if !v.isEmpty { params[field.key] = .string(v) }   // omitted if "(none)"
 
             case .number:
-                guard let d = Double((text[field.key] ?? "").trimmingCharacters(in: .whitespaces)) else {
+                guard let d = Double((text[field.key] ?? "").trimmingCharacters(in: .whitespaces)), d.isFinite else {
                     errorMessage = "Enter a number for “\(field.label)”."; return
                 }
                 params[field.key] = .double(d)
@@ -162,7 +162,7 @@ struct AnalysisSheet: View {
             case .numberOptional:
                 let s = (text[field.key] ?? "").trimmingCharacters(in: .whitespaces)
                 if !s.isEmpty {
-                    guard let d = Double(s) else {
+                    guard let d = Double(s), d.isFinite else {
                         errorMessage = "Enter a number for “\(field.label)” (or leave blank)."; return
                     }
                     params[field.key] = .double(d)

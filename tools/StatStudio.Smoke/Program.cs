@@ -18,6 +18,8 @@ internal static class Program
         FaRelTests.Run();
         BayesMixedTests.Run();
         RegressionTests.Run();
+        AuditTests.Run();
+        EngineAuditTests.Run();
         return Check.Summary();
     }
 }

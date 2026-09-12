@@ -53,7 +53,7 @@ internal static class OpsGraph
         var ws = Ws(req);
         foreach (var n in Cols(req, ws))
         {
-            var v = Require(ws, n).NumericValues();
+            var v = Require(ws, n).OrderedNumericValues();
             if (v.Length == 0) continue;
             res.AddGraph($"Time Series Plot of {n}", p => Plots.TimeSeries(p, n, v));
         }

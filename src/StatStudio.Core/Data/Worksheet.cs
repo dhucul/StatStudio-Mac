@@ -15,12 +15,23 @@ public sealed class Worksheet
 
     public DataColumn AddColumn(string? name = null, ColumnType type = ColumnType.Numeric)
     {
-        var col = new DataColumn(name ?? DefaultName(_columns.Count + 1), type);
-        _columns.Add(col);
+        if (name is null)
+        {
+            int position = _columns.Count + 1;
+            do { name = DefaultName(position++); } while (Find(name) is not null);
+        }
+        var col = new DataColumn(name, type);
+        AddColumn(col);
         return col;
     }
 
-    public void AddColumn(DataColumn column) => _columns.Add(column);
+    public void AddColumn(DataColumn column)
+    {
+        if (string.IsNullOrWhiteSpace(column.Name)) throw new ArgumentException("Column names cannot be blank.");
+        if (_columns.Any(c => string.Equals(c.Name, column.Name, StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException($"Duplicate column name '{column.Name}'. Use unique names, ignoring case.");
+        _columns.Add(column);
+    }
 
     public DataColumn? Find(string name) =>
         _columns.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));

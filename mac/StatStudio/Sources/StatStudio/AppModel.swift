@@ -17,17 +17,21 @@ final class AppModel: ObservableObject {
     /// grid reloads then — but NOT on individual cell edits (which would interrupt typing).
     @Published var gridGeneration = 0
 
-    let engine = EngineClient()
+    let engine: EngineClient
+    var finishWorksheetEditing: () -> Void = {
+        NSApp?.windows.forEach { $0.endEditing(for: nil) }
+    }
     private var operationTail: Task<Void, Never>?
     private var operationEpoch = 0
     private var operationSequence = 0
     private var worksheetRevision = 0
 
-    init() {
+    init(engine: EngineClient = EngineClient(), loadSamplesOnInit: Bool = true) {
+        self.engine = engine
         log("StatStudio — ready.")
         log("Open a CSV (File ▸ Open Data) or type into the worksheet, then run an analysis from the Stat or Graph menu.")
         log("")
-        Task { await loadSamples() }
+        if loadSamplesOnInit { Task { await loadSamples() } }
     }
 
     var dims: String {
@@ -75,6 +79,7 @@ final class AppModel: ObservableObject {
 
     /// Structural replace: swap the worksheet and tell the grid to rebuild.
     func setWorksheet(_ ws: WorksheetModel) {
+        finishWorksheetEditing()
         worksheet = ws
         worksheetRevision += 1
         gridGeneration += 1
@@ -118,8 +123,13 @@ final class AppModel: ObservableObject {
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = uttypes(["csv", "tsv", "txt", "xlsx"])
+        let header = NSButton(checkboxWithTitle: "First row contains column names", target: nil, action: nil)
+        header.state = .on
+        header.sizeToFit()
+        panel.accessoryView = header
         if panel.runModal() == .OK, let url = panel.url {
-            Task { await run(op: "import", params: ["path": .string(url.path)]) }
+            let hasHeader = header.state == .on
+            Task { await run(op: "import", params: ["path": .string(url.path), "hasHeader": .bool(hasHeader)]) }
         }
     }
 
@@ -179,16 +189,25 @@ final class AppModel: ObservableObject {
 
     private func performRun(op: String, params: [String: JSONValue], epoch: Int) async {
         do {
+            finishWorksheetEditing()
             let snapshotRevision = worksheetRevision
             let snapshot = worksheet.toDTO()
             let res = try await engine.send(op: op, worksheet: snapshot, params: params)
             guard !Task.isCancelled, epoch == operationEpoch else { return }
-            guard res.ok else { showError(op, res.error ?? "unknown error"); return }
+            guard res.ok else {
+                showError(op, res.error ?? "unknown error")
+                invalidatePendingOperations()
+                return
+            }
+            finishWorksheetEditing()
             if let ws = res.worksheet {
                 if snapshotRevision == worksheetRevision {
                     setWorksheet(.from(ws))
                 } else {
-                    log("NOTICE — \(op): worksheet changed while the command was running; its worksheet result was not applied.")
+                    statusText = "Worksheet conflict"
+                    log("CONFLICT — \(op): worksheet changed while the command was running; the result was not applied and queued commands were canceled.")
+                    invalidatePendingOperations()
+                    return
                 }
             }
             append(res.sessionText)
@@ -199,6 +218,7 @@ final class AppModel: ObservableObject {
         } catch {
             guard !Task.isCancelled, epoch == operationEpoch else { return }
             showError(op, String(describing: error))
+            invalidatePendingOperations()
         }
     }
 

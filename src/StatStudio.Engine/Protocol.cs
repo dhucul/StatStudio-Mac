@@ -8,6 +8,7 @@ public sealed class ColumnDto
 {
     public string Name { get; set; } = "";
     public List<string?> Cells { get; set; } = new();
+    public string? Type { get; set; }
 }
 
 /// <summary>The worksheet as a plain string matrix (the SwiftUI grid mirror).</summary>
