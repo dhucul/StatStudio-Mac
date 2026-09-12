@@ -38,6 +38,7 @@ HTML
 
 echo "==> pkgbuild (component → /Applications)"
 pkgbuild --root "$ROOT" --install-location /Applications \
+    --component-plist "$REPO/scripts/installer-components.plist" \
     --identifier "$ID" --version "$VERSION" \
     "$DIST/StatStudio-component.pkg" >/dev/null
 
@@ -49,7 +50,7 @@ cat > "$DISTXML" <<XML
     <title>StatStudio $VERSION</title>
     <welcome file="welcome.html"/>
     <options customize="never" require-scripts="false" hostArchitectures="arm64"/>
-    <domains enable_localSystem="true"/>
+    <domains enable_localSystem="true" enable_currentUserHome="false" enable_anywhere="false"/>
     <choices-outline><line choice="default"/></choices-outline>
     <choice id="default" title="StatStudio"><pkg-ref id="$ID"/></choice>
     <pkg-ref id="$ID" version="$VERSION">StatStudio-component.pkg</pkg-ref>
